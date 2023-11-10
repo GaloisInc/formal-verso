@@ -1,0 +1,75 @@
+enable_experimental;
+
+m <- mir_load_module "target/wasm32-unknown-unknown/release/deps/soroban_increment_contract-516a4d3c39f27127.linked-mir.json";
+
+let mir_alloc_fresh_expanded (name : String) (T : MIRType) = do {
+  ref <- mir_alloc T;
+  val <- mir_fresh_expanded_value name T;
+  mir_points_to ref val;
+  return (ref, val);
+};
+
+let mir_fresh_newtype (name : String) (Outer : MIRAdt) (Inner : MIRType) =
+do {
+  var <- mir_fresh_var name Inner;
+  return (mir_struct_value Outer [mir_term var]);
+};
+
+let Env = mir_find_adt m "soroban_sdk::env::Env" [];
+let MaybeEnv = mir_find_adt m "soroban_sdk::env::MaybeEnv" [];
+let Symbol = mir_find_adt m "soroban_sdk::symbol::Symbol" [];
+let SymbolVal = mir_find_adt m "soroban_env_common::symbol::Symbol" [];
+let Storage = mir_find_adt m "soroban_sdk::storage::Storage" [];
+let RawVal = mir_find_adt m "soroban_env_common::raw_val::RawVal" [];
+
+let storage_has_internal_spec = do {
+  (rself, _) <- mir_alloc_fresh_expanded "self" (mir_adt Storage);
+  key <- mir_fresh_newtype "key" RawVal mir_u64;
+  mir_execute_func [rself, key];
+  ret <- mir_fresh_var "ret" mir_bool;
+  mir_return (mir_term ret);
+};
+
+let storage_get_internal_spec = do {
+  (rself, _) <- mir_alloc_fresh_expanded "self" (mir_adt Storage);
+  key <- mir_fresh_newtype "key" RawVal mir_u64;
+  mir_execute_func [rself, key];
+  ret <- mir_fresh_newtype "val" RawVal mir_u64;
+  mir_return ret;
+};
+
+let storage_set_symbol_u32_spec = do {
+  (rself, _) <- mir_alloc_fresh_expanded "self" (mir_adt Storage);
+  rkey <- mir_alloc (mir_adt Symbol);
+  key_env <- mir_fresh_expanded_value "env" (mir_adt MaybeEnv);
+  key_raw_val <- mir_fresh_newtype "key_raw_val" RawVal mir_u64;
+  let key_val = mir_struct_value SymbolVal [key_raw_val];
+  let key = mir_struct_value Symbol [key_env, key_val];
+  mir_points_to rkey key;
+  (rval, _) <- mir_alloc_fresh_expanded "val" mir_u32;
+  mir_execute_func [rself, rkey, rval];
+};
+
+storage_has_internal_ov <- mir_unsafe_assume_spec m
+  "soroban_sdk::storage::{impl#1}::has_internal"
+  storage_has_internal_spec;
+storage_get_internal_ov <- mir_unsafe_assume_spec m
+  "soroban_sdk::storage::{impl#1}::get_internal"
+  storage_get_internal_spec;
+storage_set_symbol_u32_ov <- mir_unsafe_assume_spec m
+  "soroban_sdk::storage::{impl#1}::set::_inst902de58461a9aaeb"
+  storage_set_symbol_u32_spec;
+
+let increment_spec = do {
+  env <- mir_fresh_expanded_value "env" (mir_adt Env);
+  mir_execute_func [env];
+  count <- mir_fresh_var "count" mir_u32;
+  mir_return (mir_term count);
+};
+
+mir_verify m "soroban_increment_contract::{impl#1}::increment"
+  [ storage_has_internal_ov
+  , storage_get_internal_ov
+  , storage_set_symbol_u32_ov
+  ]
+  true increment_spec z3;

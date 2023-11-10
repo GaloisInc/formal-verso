@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![cfg(not(crux))]
 
 use super::{IncrementContract, IncrementContractClient};
 use soroban_sdk::{testutils::Logger, Env};

@@ -13,7 +13,7 @@ doctest = false
 [dependencies]
 soroban-sdk = { version = "0.8.4" }
 
-[dev_dependencies]
+[target.'cfg(not(crux))'.dev_dependencies]
 soroban-sdk = { version = "0.8.4", features = ["testutils"] }
 
 [profile.release]

@@ -1,75 +1,168 @@
 enable_experimental;
 
+Map <- cryptol_load "Map.cry";
+RawVal <- cryptol_load "RawVal.cry";
+Tag <- cryptol_load "Tag.cry";
+
 m <- mir_load_module "target/wasm32-unknown-unknown/release/deps/soroban_increment_contract-516a4d3c39f27127.linked-mir.json";
 
-let mir_alloc_fresh_expanded (name : String) (T : MIRType) = do {
-  ref <- mir_alloc T;
-  val <- mir_fresh_expanded_value name T;
+let mir_alloc_fresh_expanded (name : String) (ty : MIRType) = do {
+  ref <- mir_alloc ty;
+  val <- mir_fresh_expanded_value name ty;
   mir_points_to ref val;
   return (ref, val);
 };
 
-let mir_fresh_newtype (name : String) (Outer : MIRAdt) (Inner : MIRType) =
-do {
-  var <- mir_fresh_var name Inner;
-  return (mir_struct_value Outer [mir_term var]);
+let soroban_Env = mir_find_adt m "soroban_sdk::env::Env" [];
+let soroban_MaybeEnv = mir_find_adt m "soroban_sdk::env::MaybeEnv" [];
+let soroban_Symbol = mir_find_adt m "soroban_sdk::symbol::Symbol" [];
+let soroban_SymbolVal = mir_find_adt m "soroban_env_common::symbol::Symbol" [];
+let soroban_Storage = mir_find_adt m "soroban_sdk::storage::Storage" [];
+let soroban_RawVal = mir_find_adt m "soroban_env_common::raw_val::RawVal" [];
+
+let COUNTER = 253576579652878;
+
+typedef StorageGhost =
+  { storage_ghost : Ghost
+  , storage_ghost_size : Int
+  };
+
+let declare_storage_ghost (size : Int) = do {
+  ghost <- declare_ghost_state "storage_ghost";
+  return
+    { storage_ghost = ghost
+    , storage_ghost_size = size
+    };
 };
 
-let Env = mir_find_adt m "soroban_sdk::env::Env" [];
-let MaybeEnv = mir_find_adt m "soroban_sdk::env::MaybeEnv" [];
-let Symbol = mir_find_adt m "soroban_sdk::symbol::Symbol" [];
-let SymbolVal = mir_find_adt m "soroban_env_common::symbol::Symbol" [];
-let Storage = mir_find_adt m "soroban_sdk::storage::Storage" [];
-let RawVal = mir_find_adt m "soroban_env_common::raw_val::RawVal" [];
+let fresh_storage_ghost (name : String) (sg : StorageGhost) = do {
+  let sg_size = sg.storage_ghost_size;
+  mir_fresh_cryptol_var
+    (str_concat (str_concat name "::") "storage_ghost")
+    {| Map::Map sg_size RawVal::RawVal RawVal::RawVal |};
+};
 
-let storage_has_internal_spec = do {
-  (rself, _) <- mir_alloc_fresh_expanded "self" (mir_adt Storage);
-  key <- mir_fresh_newtype "key" RawVal mir_u64;
+let storage_has_internal_spec (sg : StorageGhost) = do {
+
+  sg_val <- fresh_storage_ghost "Storage::has_internal" sg;
+  mir_ghost_value sg.storage_ghost sg_val;
+
+  (rself, _) <- mir_alloc_fresh_expanded
+    "Storage::has_internal::self" (mir_adt soroban_Storage);
+
+  key_payload <- mir_fresh_var "Storage::has_internal::key::payload" mir_u64;
+  let key = mir_struct_value soroban_RawVal [mir_term key_payload];
+
   mir_execute_func [rself, key];
-  ret <- mir_fresh_var "ret" mir_bool;
-  mir_return (mir_term ret);
+
+  mir_ghost_value sg.storage_ghost sg_val;
+
+  mir_return (mir_term {{ Map::elem key_payload sg_val }});
+
 };
 
-let storage_get_internal_spec = do {
-  (rself, _) <- mir_alloc_fresh_expanded "self" (mir_adt Storage);
-  key <- mir_fresh_newtype "key" RawVal mir_u64;
+let storage_get_internal_spec (sg : StorageGhost) = do {
+
+  sg_val <- fresh_storage_ghost "Storage::get_internal" sg;
+
+  (rself, _) <- mir_alloc_fresh_expanded
+    "Storage::get_internal::self" (mir_adt soroban_Storage);
+
+  key_payload <- mir_fresh_var "Storage::get_internal::key::payload" mir_u64;
+  let key = mir_struct_value soroban_RawVal [mir_term key_payload];
+
+  mir_precond {{ Map::elem key_payload sg_val }};
+
+  mir_ghost_value sg.storage_ghost sg_val;
+
   mir_execute_func [rself, key];
-  ret <- mir_fresh_newtype "val" RawVal mir_u64;
-  mir_return ret;
+
+  mir_ghost_value sg.storage_ghost sg_val;
+
+  let val_payload = {{ (Map::lookup key_payload sg_val).1 }};
+  mir_return (mir_struct_value soroban_RawVal [mir_term val_payload]);
+
 };
 
-let storage_set_symbol_u32_spec = do {
-  (rself, _) <- mir_alloc_fresh_expanded "self" (mir_adt Storage);
-  rkey <- mir_alloc (mir_adt Symbol);
-  key_env <- mir_fresh_expanded_value "env" (mir_adt MaybeEnv);
-  key_raw_val <- mir_fresh_newtype "key_raw_val" RawVal mir_u64;
-  let key_val = mir_struct_value SymbolVal [key_raw_val];
-  let key = mir_struct_value Symbol [key_env, key_val];
+let storage_set_symbol_u32_spec (sg : StorageGhost) = do {
+
+  sg_val <- fresh_storage_ghost "Storage::set<Symbol, u32>" sg;
+  mir_ghost_value sg.storage_ghost sg_val;
+
+  (rself, _) <- mir_alloc_fresh_expanded "Storage::set<Symbol, u32>::self"
+    (mir_adt soroban_Storage);
+
+  key_env <- mir_fresh_expanded_value
+    "Storage::set<Symbol, u32>::key::env" (mir_adt soroban_MaybeEnv);
+  key_payload <- mir_fresh_var
+    "Storage::set<Symbol, u32>::key::val::payload" mir_u64;
+  let key_rawval = mir_struct_value soroban_RawVal [mir_term key_payload];
+  let key_val = mir_struct_value soroban_SymbolVal [key_rawval];
+  let key = mir_struct_value soroban_Symbol [key_env, key_val];
+  rkey <- mir_alloc (mir_adt soroban_Symbol);
   mir_points_to rkey key;
-  (rval, _) <- mir_alloc_fresh_expanded "val" mir_u32;
+
+  val <- mir_fresh_var "Storage::set<Symbol, u32>::val" mir_u32;
+  rval <- mir_alloc mir_u32;
+  mir_points_to rval (mir_term val);
+
   mir_execute_func [rself, rkey, rval];
+
+  mir_ghost_value sg.storage_ghost
+    {{ Map::set key_payload (RawVal::from_u32 val) sg_val }};
+
 };
 
-storage_has_internal_ov <- mir_unsafe_assume_spec m
-  "soroban_sdk::storage::{impl#1}::has_internal"
-  storage_has_internal_spec;
-storage_get_internal_ov <- mir_unsafe_assume_spec m
-  "soroban_sdk::storage::{impl#1}::get_internal"
-  storage_get_internal_spec;
-storage_set_symbol_u32_ov <- mir_unsafe_assume_spec m
-  "soroban_sdk::storage::{impl#1}::set::_inst902de58461a9aaeb"
-  storage_set_symbol_u32_spec;
+let increment_spec (sg : StorageGhost) = do {
 
-let increment_spec = do {
-  env <- mir_fresh_expanded_value "env" (mir_adt Env);
+  sg_val <- fresh_storage_ghost "increment" sg;
+
+  mir_precond {{
+    exists ==> is_u32 /\ count < 1000
+    where
+    (exists, raw_count) = Map::lookup `COUNTER sg_val
+    (is_u32, count) = RawVal::try_convert_u32 raw_count
+  }};
+
+  mir_ghost_value sg.storage_ghost sg_val;
+
+  env <- mir_fresh_expanded_value "increment::env" (mir_adt soroban_Env);
+
   mir_execute_func [env];
-  count <- mir_fresh_var "count" mir_u32;
-  mir_return (mir_term count);
+
+  let result = {{
+    if exists then count + 1 else 1
+    where
+    (exists, raw_count) = Map::lookup `COUNTER sg_val
+    (_, count) = RawVal::try_convert_u32 raw_count
+  }};
+
+  mir_ghost_value sg.storage_ghost
+    {{ Map::set `COUNTER (RawVal::from_u32 result) sg_val }};
+
+  mir_return (mir_term result);
+
 };
 
-mir_verify m "soroban_increment_contract::{impl#1}::increment"
-  [ storage_has_internal_ov
-  , storage_get_internal_ov
-  , storage_set_symbol_u32_ov
-  ]
-  true increment_spec z3;
+let main = do {
+
+  sg <- declare_storage_ghost 1;
+
+  storage_has_internal_ov <- mir_unsafe_assume_spec m
+    "soroban_sdk::storage::{impl#1}::has_internal"
+    (storage_has_internal_spec sg);
+  storage_get_internal_ov <- mir_unsafe_assume_spec m
+    "soroban_sdk::storage::{impl#1}::get_internal"
+    (storage_get_internal_spec sg);
+  storage_set_symbol_u32_ov <- mir_unsafe_assume_spec m
+    "soroban_sdk::storage::{impl#1}::set::_inst902de58461a9aaeb"
+    (storage_set_symbol_u32_spec sg);
+
+  mir_verify m "soroban_increment_contract::{impl#1}::increment"
+    [ storage_has_internal_ov
+    , storage_get_internal_ov
+    , storage_set_symbol_u32_ov
+    ]
+    true (increment_spec sg) z3;
+
+};

@@ -3,6 +3,7 @@ enable_experimental;
 Map <- cryptol_load "Map.cry";
 RawVal <- cryptol_load "RawVal.cry";
 Tag <- cryptol_load "Tag.cry";
+Symbol <- cryptol_load "Symbol.cry";
 
 m <- mir_load_module "target/wasm32-unknown-unknown/release/deps/soroban_increment_contract-516a4d3c39f27127.linked-mir.json";
 
@@ -20,7 +21,7 @@ let soroban_SymbolVal = mir_find_adt m "soroban_env_common::symbol::Symbol" [];
 let soroban_Storage = mir_find_adt m "soroban_sdk::storage::Storage" [];
 let soroban_RawVal = mir_find_adt m "soroban_env_common::raw_val::RawVal" [];
 
-let COUNTER = 253576579652878;
+let COUNTER = {{ Symbol::short "COUNTER" }};
 
 typedef StorageGhost =
   { storage_ghost : Ghost
@@ -120,7 +121,7 @@ let increment_spec (sg : StorageGhost) = do {
   mir_precond {{
     exists ==> is_u32 /\ count < 1000
     where
-    (exists, raw_count) = Map::lookup `COUNTER sg_val
+    (exists, raw_count) = Map::lookup COUNTER sg_val
     (is_u32, count) = RawVal::try_convert_u32 raw_count
   }};
 
@@ -133,12 +134,12 @@ let increment_spec (sg : StorageGhost) = do {
   let result = {{
     if exists then count + 1 else 1
     where
-    (exists, raw_count) = Map::lookup `COUNTER sg_val
+    (exists, raw_count) = Map::lookup COUNTER sg_val
     (_, count) = RawVal::try_convert_u32 raw_count
   }};
 
   mir_ghost_value sg.storage_ghost
-    {{ Map::set `COUNTER (RawVal::from_u32 result) sg_val }};
+    {{ Map::set COUNTER (RawVal::from_u32 result) sg_val }};
 
   mir_return (mir_term result);
 

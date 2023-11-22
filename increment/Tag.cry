@@ -1,9 +1,0 @@
-module Tag where
-
-type Tag = [8]
-
-u32 : Tag
-u32 = 4
-
-symbol_small : Tag
-symbol_small = 14

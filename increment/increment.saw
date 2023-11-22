@@ -118,12 +118,10 @@ let increment_spec (sg : StorageGhost) = do {
 
   sg_val <- fresh_storage_ghost "increment" sg;
 
-  mir_precond {{
-    exists ==> is_u32 /\ count < 1000
-    where
-    (exists, raw_count) = Map::lookup COUNTER sg_val
-    (is_u32, count) = RawVal::try_convert_u32 raw_count
-  }};
+  let {{ (exists, raw_count) = Map::lookup COUNTER sg_val }};
+  let {{ (is_u32, count) = RawVal::try_convert_u32 raw_count }};
+
+  mir_precond {{ exists ==> is_u32 /\ count < 1000 }};
 
   mir_ghost_value sg.storage_ghost sg_val;
 
@@ -131,12 +129,7 @@ let increment_spec (sg : StorageGhost) = do {
 
   mir_execute_func [env];
 
-  let result = {{
-    if exists then count + 1 else 1
-    where
-    (exists, raw_count) = Map::lookup COUNTER sg_val
-    (_, count) = RawVal::try_convert_u32 raw_count
-  }};
+  let result = {{ if exists then count + 1 else 1 }};
 
   mir_ghost_value sg.storage_ghost
     {{ Map::set COUNTER (RawVal::from_u32 result) sg_val }};

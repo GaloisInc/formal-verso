@@ -1,0 +1,14 @@
+import "Option.cry" as Option;
+
+typedef OptionAPI = {
+  unwrap : (Term /* Option a */ -> MIRSetup (Term /* a */))
+};
+
+let option = {
+
+  unwrap = \o -> do {
+    mir_assert {{ o.exists }};
+    return {{ o.value }};
+  }
+
+};

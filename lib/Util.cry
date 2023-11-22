@@ -1,0 +1,7 @@
+module Util where
+
+/** Length-polymorphic sequence equality. */
+lenPolyEq : {a, n, m} (Eq a, fin n) => [n]a -> [m]a -> Bit
+lenPolyEq xs ys
+  | n == m => xs == ys
+  | n != m => False

@@ -1,0 +1,26 @@
+module Storage where
+
+import Array
+import Option (Option)
+import RawVal (RawVal, RawValImpl)
+
+type Storage = StorageImpl
+
+private
+  newtype StorageImpl = { array : Array RawVal OptionRawVal }
+  // Can't use Option RawVal due to saw-script#1988
+  // first bit = exists, rest = data
+  type OptionRawVal = [65]
+
+has : Storage -> RawVal -> Bit
+has s k = (get s k).exists
+
+get : Storage -> RawVal -> Option RawVal
+get s k =
+  { exists = head orv
+  , value = RawValImpl { payload = tail orv }
+  }
+  where orv = arrayLookup s.array k
+
+set : Storage -> RawVal -> RawVal -> Storage
+set s k v = StorageImpl { array = arrayUpdate s.array k (0b1 # v.payload) }

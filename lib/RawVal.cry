@@ -1,0 +1,56 @@
+module RawVal where
+
+import Option
+
+type Payload = [64]
+type RawVal = RawValImpl
+newtype RawValImpl = { payload : Payload }
+
+type Tag = [8]
+
+submodule Tag where
+
+  u32 : Tag
+  u32 = 4
+
+  symbol_small : Tag
+  symbol_small = 14
+
+  symbol_object : Tag
+  symbol_object = 74
+
+has_tag : Tag -> RawVal -> Bit
+has_tag t rv = get_tag rv == t
+
+from_u32 : [32] -> RawVal
+from_u32 u = from_major_minor_and_tag u 0 Tag::u32
+
+is_u32 : RawVal -> Bit
+is_u32 = has_tag Tag::u32
+
+to_u32 : RawVal -> Option [32]
+to_u32 rv = { exists = is_u32 rv, value = get_major rv }
+
+from_symbol_small : Body -> RawVal
+from_symbol_small body = from_body_and_tag body Tag::symbol_small
+
+private
+
+  type Body = [56]
+  type Major = [32]
+  type Minor = [24]
+
+  from_body_and_tag : Body -> Tag -> RawVal
+  from_body_and_tag body tag = RawValImpl { payload = body # tag }
+
+  from_major_minor_and_tag : Major -> Minor -> Tag -> RawVal
+  from_major_minor_and_tag major minor = from_body_and_tag (major # minor)
+
+  get_tag : RawVal -> Tag
+  get_tag rv = drop rv.payload
+
+  get_body : RawVal -> Body
+  get_body rv = take rv.payload
+
+  get_major : RawVal -> Major
+  get_major rv = take (get_body rv)

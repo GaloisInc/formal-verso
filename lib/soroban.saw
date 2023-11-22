@@ -1,0 +1,344 @@
+enable_experimental;
+
+typedef SorobanCry = {
+  RawVal : CryptolModule,
+  Storage : CryptolModule,
+  Symbol : CryptolModule
+};
+
+typedef SorobanAdt = {
+  Guest : MIRAdt,
+  Env : MIRAdt,
+  MaybeEnv : MIRAdt,
+  Storage : MIRAdt,
+  Symbol : MIRAdt,
+  RawVal : MIRAdt,
+  SymbolVal : MIRAdt
+};
+
+typedef SorobanSpecAPI = {
+
+  storage : {
+    state : (Term /* Storage */ -> MIRSetup ()),
+    fresh : MIRSetup Term /* Storage */,
+    has : (Term /* Storage */ -> Term /* k */ -> Term /* Bit */),
+    get : (Term /* Storage */ ->
+      Term /* k */ -> Type /* = v */ -> Term /* Option (Option v) */),
+    set : (Term /* Storage */ ->
+      Term /* k */ -> Term /* v */ -> Term /* Storage */)
+  },
+
+  fresh_var : (String -> MIRType -> MIRSetup Term),
+  fresh_cryptol_var : (String -> Type -> MIRSetup Term),
+  fresh_expanded_value : (String -> MIRType -> MIRSetup MIRValue),
+
+  mir_value : {
+    Guest : MIRValue,
+    Env : MIRValue,
+    MaybeEnv : MIRValue,
+    Storage : MIRValue
+  },
+  to_mir_value : (Term -> MIRValue),
+  to_mir_type : (Type -> MIRType)
+
+};
+
+typedef SorobanGenericSdkSpecs = {
+  storage : {
+    set : (Type -> Type -> MIRSetup ())
+  }
+};
+
+typedef SorobanPrepareVerifyArgs = {
+  instantiate : [(String, MIRSetup ())]
+};
+
+typedef SorobanVerifyArgs = {
+  fun : String,
+  overrides : [MIRSpec],
+  path_sat : Bool,
+  spec : MIRSetup (),
+  proof : ProofScript ()
+};
+
+typedef SorobanVerify = SorobanVerifyArgs -> TopLevel MIRSpec;
+
+typedef SorobanAPI = {
+  cry : SorobanCry,
+  adt : SorobanAdt,
+  spec : (String -> (SorobanSpecAPI -> MIRSetup ()) -> MIRSetup ()),
+  generic_sdk_specs : SorobanGenericSdkSpecs,
+  prepare_verify : (SorobanPrepareVerifyArgs -> TopLevel SorobanVerify)
+};
+
+soroban_init <- do {
+
+  Option <- cryptol_load "Option.cry";
+  RawVal <- cryptol_load "RawVal.cry";
+  Storage <- cryptol_load "Storage.cry";
+  Symbol <- cryptol_load "Symbol.cry";
+  Util <- cryptol_load "Util.cry";
+
+  let soroban_init (mod : MIRModule) : TopLevel SorobanAPI = do {
+
+    state <- do {
+      storage <- declare_ghost_state "Soroban::storage";
+      return {
+        storage = storage
+      };
+    };
+
+    let type_eq (t1 : Type) (t2 : Type) : Bool =
+      let s1 = show t1 in
+      let s2 = show t2 in
+      eval_bool {{ Util::lenPolyEq s1 s2 }};
+
+    let to_RawVal (t : Type) : Term /* t -> RawVal */ =
+      if type_eq t {| RawVal::RawVal |} then
+        {{ \(rv : RawVal::RawVal) -> rv }}
+      else if type_eq t {| [32] |} then
+        {{ RawVal::from_u32 }}
+      else if type_eq t {| Symbol::Symbol |} then
+        {{ \(s : Symbol::Symbol) -> s.raw }}
+      else
+        run (fail (str_concat (show t) " cannot be converted to RawVal"));
+
+    let type_RawVal (t : Type) : Term /* RawVal -> Bit */ =
+      if type_eq t {| [32] |} then
+        {{ RawVal::is_u32 }}
+      else if type_eq t {| Symbol::Symbol |} then
+        {{ Symbol::is_symbol }}
+      else
+        run (fail (str_concat (show t) " is not a type of RawVal"));
+
+    let from_RawVal (t : Type) : Term /* RawVal -> Option t */ =
+      if type_eq t {| RawVal::RawVal |} then
+        {{ Option::pure : RawVal::RawVal -> Option (RawVal::RawVal) }}
+      else if type_eq t {| [32] |} then
+        {{ RawVal::to_u32 }}
+      else if type_eq t {| Symbol::Symbol |} then
+        {{ Symbol::from_raw_val }}
+      else
+        run (fail (str_concat (show t) " cannot be converted from RawVal"));
+
+    let soroban_adt : SorobanAdt = {
+      Guest = mir_find_adt mod "soroban_env_guest::guest::Guest" [],
+      Env = mir_find_adt mod "soroban_sdk::env::Env" [],
+      MaybeEnv = mir_find_adt mod "soroban_sdk::env::MaybeEnv" [],
+      Storage = mir_find_adt mod "soroban_sdk::storage::Storage" [],
+      Symbol = mir_find_adt mod "soroban_sdk::symbol::Symbol" [],
+      RawVal = mir_find_adt mod "soroban_env_common::raw_val::RawVal" [],
+      SymbolVal = mir_find_adt mod "soroban_env_common::symbol::Symbol" []
+    };
+
+    let mir_value =
+      let mir_value_Guest =
+        mir_struct_value soroban_adt.Guest [] in
+      let mir_value_Env =
+        mir_struct_value soroban_adt.Env [mir_value_Guest] in
+      let mir_value_MaybeEnv =
+        mir_struct_value soroban_adt.MaybeEnv [mir_value_Guest] in
+      let mir_value_Storage =
+        mir_struct_value soroban_adt.Storage [mir_value_Env] in
+      {
+        Guest = mir_value_Guest,
+        Env = mir_value_Env,
+        MaybeEnv = mir_value_MaybeEnv,
+        Storage = mir_value_Storage
+      };
+
+    rec to_mir_value x =
+      let t = type x in
+      if type_eq t {| RawVal::RawVal |} then
+        mir_struct_value soroban_adt.RawVal [mir_term {{ (x : RawVal::RawVal).payload }}]
+      else if type_eq t {| Symbol::Symbol |} then
+        mir_struct_value soroban_adt.Symbol [
+          mir_value.MaybeEnv,
+          mir_struct_value soroban_adt.SymbolVal [to_mir_value {{ x.raw }}]
+        ]
+      else
+        // fall back to mir_term
+        mir_term x;
+
+    let to_mir_type t =
+      if type_eq t {| [32] |} then
+        mir_u32
+      else if type_eq t {| RawVal::RawVal |} then
+        mir_adt soroban_adt.RawVal
+      else if type_eq t {| Symbol::Symbol |} then
+        mir_adt soroban_adt.Symbol
+      else
+        run (fail (str_concat (show t) " cannot be converted to MIRType"));
+
+    let soroban_spec name spec = do {
+
+      let qual x = str_concats [name, "::", x];
+
+      spec {
+
+        storage = {
+
+          state = \storage -> do {
+            mir_ghost_value state.storage storage;
+          },
+
+          fresh =
+            mir_fresh_cryptol_var (qual "storage") {| Storage::Storage |},
+
+          has = \storage k ->
+            let k_to_RawVal = to_RawVal (type k) in
+            {{ Storage::has storage (k_to_RawVal k) }},
+
+          get = \storage k tv ->
+            let k_to_RawVal = to_RawVal (type k) in
+            let v_from_RawVal = from_RawVal tv in
+            {{ Option::fmap
+                (Storage::get storage (k_to_RawVal k))
+                v_from_RawVal }},
+
+          set = \storage k v ->
+            let k_to_RawVal = to_RawVal (type k) in
+            let v_to_RawVal = to_RawVal (type v) in
+            {{ Storage::set storage (k_to_RawVal k) (v_to_RawVal v) }}
+
+        },
+
+        fresh_var = \name -> mir_fresh_var (qual name),
+        fresh_cryptol_var = \name -> mir_fresh_cryptol_var (qual name),
+        fresh_expanded_value = \name -> mir_fresh_expanded_value (qual name),
+
+        mir_value = mir_value,
+
+        to_mir_value = to_mir_value,
+        to_mir_type = to_mir_type
+
+      };
+
+    };
+
+    let mono_sdk_specs = {
+
+      storage = {
+
+        has_internal = soroban_spec "soroban_sdk::storage::has_internal"
+          (\(s : SorobanSpecAPI) -> do {
+
+            storage <- s.storage.fresh;
+
+            self <- mir_alloc (mir_adt soroban_adt.Storage);
+            mir_points_to self (s.mir_value.Storage);
+
+            key <- s.fresh_cryptol_var "key" {| RawVal::RawVal |};
+
+            s.storage.state storage;
+
+            mir_execute_func [self, s.to_mir_value key];
+
+            s.storage.state storage;
+
+            mir_return (mir_term {{ Storage::has storage key }});
+
+          }),
+
+        get_internal = soroban_spec "soroban_sdk::storage::get_internal"
+          (\(s : SorobanSpecAPI) -> do {
+
+            storage <- s.storage.fresh;
+
+            self <- mir_alloc (mir_adt soroban_adt.Storage);
+            mir_points_to self (s.mir_value.Storage);
+
+            key <- s.fresh_cryptol_var "key" {| RawVal::RawVal |};
+
+            mir_precond {{ Storage::has storage key }};
+            s.storage.state storage;
+
+            mir_execute_func [self, s.to_mir_value key];
+
+            s.storage.state storage;
+
+            mir_return (s.to_mir_value {{ (Storage::get storage key).value }});
+
+          })
+
+      }
+
+    };
+
+    let generic_sdk_specs = {
+
+      storage = {
+
+        set = \tk tv -> soroban_spec
+          (str_concats
+            ["soroban_sdk::storage::set<", show tk, ", ", show tv, ">"])
+          (\(s : SorobanSpecAPI) -> do {
+
+            storage <- s.storage.fresh;
+
+            self <- mir_alloc (mir_adt soroban_adt.Storage);
+            mir_points_to self (s.mir_value.Storage);
+
+            key <- s.fresh_cryptol_var "key" tk;
+            let key_mir = s.to_mir_value key;
+            rkey <- mir_alloc (s.to_mir_type tk);
+            mir_points_to rkey key_mir;
+
+            val <- s.fresh_cryptol_var "val" tv;
+            let val_mir = s.to_mir_value val;
+            rval <- mir_alloc (s.to_mir_type tv);
+            mir_points_to rval val_mir;
+
+            s.storage.state storage;
+
+            mir_execute_func [self, rkey, rval];
+
+            s.storage.state (s.storage.set storage key val);
+
+          })
+
+      }
+
+    };
+
+    let unsafe_assume_specs (specs : [(String, MIRSetup ())]) =
+      for specs (\(name, spec) -> mir_unsafe_assume_spec mod name spec);
+
+    mono_sdk_overrides <- unsafe_assume_specs [
+      ("soroban_sdk::storage::{impl#1}::has_internal",
+        mono_sdk_specs.storage.has_internal),
+      ("soroban_sdk::storage::{impl#1}::get_internal",
+        mono_sdk_specs.storage.get_internal)
+    ];
+
+    let soroban_verify sdk_overrides (args : SorobanVerifyArgs) = do {
+      mir_verify mod args.fun (concat sdk_overrides args.overrides)
+        args.path_sat args.spec args.proof;
+    };
+
+    return {
+
+      cry = {
+        RawVal = RawVal,
+        Storage = Storage,
+        Symbol = Symbol
+      },
+
+      adt = soroban_adt,
+
+      spec = soroban_spec,
+
+      generic_sdk_specs = generic_sdk_specs,
+
+      prepare_verify = \(args : SorobanPrepareVerifyArgs) -> do {
+        inst_sdk_overrides <- unsafe_assume_specs args.instantiate;
+        return (soroban_verify (concat mono_sdk_overrides inst_sdk_overrides));
+      }
+
+    };
+
+  };
+
+  return soroban_init;
+
+};

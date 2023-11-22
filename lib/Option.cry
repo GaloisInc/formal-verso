@@ -1,0 +1,21 @@
+module Option where
+
+type Option a =
+  { exists : Bit
+  , value : a
+  }
+
+unwrap_or : {a} Option a -> a -> a
+unwrap_or o def = if o.exists then o.value else def
+
+ok : {a} a -> Option a
+ok x =
+  { exists = True
+  , value = x
+  }
+
+fmap : {a, b} (Zero b) => Option a -> (a -> b) -> Option b
+fmap o f =
+  { exists = o.exists
+  , value = f o.value
+  }

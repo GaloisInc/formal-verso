@@ -103,14 +103,6 @@ soroban_init <- do {
       else
         run (fail (str_concat (show t) " cannot be converted to RawVal"));
 
-    let type_RawVal (t : Type) : Term /* RawVal -> Bit */ =
-      if type_eq t {| [32] |} then
-        {{ RawVal::is_u32 }}
-      else if type_eq t {| Symbol::Symbol |} then
-        {{ Symbol::is_symbol }}
-      else
-        run (fail (str_concat (show t) " is not a type of RawVal"));
-
     let from_RawVal (t : Type) : Term /* RawVal -> Option t */ =
       if type_eq t {| RawVal::RawVal |} then
         {{ Option::pure : RawVal::RawVal -> Option (RawVal::RawVal) }}

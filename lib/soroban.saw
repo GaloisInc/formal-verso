@@ -120,9 +120,7 @@ soroban_init <- do {
       eval_bool {{ Util::lenPolyEq s1 s2 }};
 
     let to_RawVal (t : Type) : Term /* t -> RawVal */ =
-      if type_eq t {| RawVal::RawVal |} then
-        {{ \(rv : RawVal::RawVal) -> rv }}
-      else if type_eq t {| [32] |} then
+      if type_eq t {| [32] |} then
         {{ RawVal::from_u32 }}
       else if type_eq t {| Symbol::Symbol |} then
         {{ \(s : Symbol::Symbol) -> s.raw }}
@@ -130,9 +128,7 @@ soroban_init <- do {
         run (fail (str_concat (show t) " cannot be converted to RawVal"));
 
     let from_RawVal (t : Type) : Term /* RawVal -> Option t */ =
-      if type_eq t {| RawVal::RawVal |} then
-        {{ Option::pure : RawVal::RawVal -> Option (RawVal::RawVal) }}
-      else if type_eq t {| [32] |} then
+      if type_eq t {| [32] |} then
         {{ RawVal::to_u32 }}
       else if type_eq t {| Symbol::Symbol |} then
         {{ Symbol::from_raw_val }}

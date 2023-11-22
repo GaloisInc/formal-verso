@@ -139,7 +139,7 @@ soroban_init <- do {
       let t = type x in
       if type_eq t {| RawVal::RawVal |} then
         mir_struct_value soroban_adt.RawVal [
-          mir_term {{ (x : RawVal::RawVal).payload }}
+          mir_term {{ x.payload }}
         ]
       else if type_eq t {| Symbol::Symbol |} then
         mir_struct_value soroban_adt.Symbol [

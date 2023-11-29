@@ -4,6 +4,15 @@ type T = Tag
 
 type Tag = [8]
 
+false : Tag
+false = 0
+
+true : Tag
+true = 1
+
+void : Tag
+void = 2
+
 u32 : Tag
 u32 = 4
 

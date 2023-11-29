@@ -1,0 +1,6 @@
+module Void::Val = Wrapper where
+
+import RawVal as RawVal
+import Void::Raw as Raw
+
+valid_raw rv = RawVal::shallow_eq rv Raw::void

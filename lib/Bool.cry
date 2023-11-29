@@ -1,0 +1,18 @@
+module Bool where
+
+import Bool::Raw as Bool::Raw
+import Bool::Val as Bool::Val
+import RawVal as RawVal
+
+type T = Bool
+
+type Bool = Bool::Val::T
+
+to_bit : Bool::Val::T -> Bit
+to_bit v = RawVal::shallow_eq (Bool::Val::to_raw v) Bool::Raw::true
+
+from_bit : Bit -> Bool::Val::T
+from_bit b = Bool::Val::unsafe_from_raw (Bool::Raw::from_bit b)
+
+from_raw = Bool::Val::from_raw
+valid = Bool::Val::valid

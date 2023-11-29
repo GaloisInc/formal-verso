@@ -32,14 +32,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
 
 });
 
-verify <- soroban.prepare_verify {
-  instantiate = [
-    ("soroban_sdk::storage::{impl#1}::set::_inst902de58461a9aaeb",
-      soroban.generic_sdk_specs.storage.set {| Symbol::T |} {| [32] |})
-  ]
-};
-
-verify {
+soroban.verify {
   fun = "soroban_increment_contract::{impl#1}::increment",
   overrides = [],
   path_sat = true,

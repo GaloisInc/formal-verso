@@ -1,0 +1,14 @@
+module Void where
+
+import Void::Raw as Void::Raw
+import Void::Val as Void::Val
+
+type T = Void
+
+type Void = Void::Val::T
+
+void : Void::Val::T
+void = Void::Val::unsafe_from_raw Void::Raw::void
+
+from_raw = Void::Val::from_raw
+valid = Void::Val::valid

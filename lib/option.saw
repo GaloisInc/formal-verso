@@ -7,8 +7,8 @@ typedef OptionAPI = {
 let option = {
 
   unwrap = \o -> do {
-    mir_assert {{ o.exists }};
-    return {{ o.value }};
+    mir_assert {{ Option::is_ok o }};
+    return {{ Option::unsafe_unwrap o }};
   }
 
 };

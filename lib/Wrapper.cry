@@ -1,0 +1,24 @@
+module Wrapper where
+
+import Body as Body
+import Option as Option
+import RawVal as RawVal
+
+parameter
+  valid_raw : RawVal::T -> Bit
+
+type T = Wrapper
+
+newtype Wrapper = { raw : RawVal::T }
+
+to_raw : Wrapper -> RawVal::T
+to_raw w = w.raw
+
+from_raw : RawVal::T -> Option::T Wrapper
+from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
+
+unsafe_from_raw : RawVal::T -> Wrapper
+unsafe_from_raw rv = Wrapper { raw = rv }
+
+valid : Wrapper -> Bit
+valid w = valid_raw w.raw

@@ -1,26 +1,23 @@
 module Storage where
 
 import Array
-import Option (Option)
-import RawVal (RawVal, RawValImpl)
+import Option as Option
+import RawVal as RawVal
 
-type Storage = StorageImpl
+type T = Storage
 
 private
-  newtype StorageImpl = { array : Array RawVal OptionRawVal }
+  newtype Storage = { array : Array RawVal::T OptionRawVal }
   // Can't use Option RawVal due to saw-script#1988
   // first bit = exists, rest = data
   type OptionRawVal = [65]
 
-has : Storage -> RawVal -> Bit
-has s k = (get s k).exists
+has : Storage -> RawVal::T -> Bit
+has s k = Option::is_ok (get s k)
 
-get : Storage -> RawVal -> Option RawVal
-get s k =
-  { exists = head orv
-  , value = RawValImpl { payload = tail orv }
-  }
+get : Storage -> RawVal::T -> Option::T RawVal::T
+get s k = Option::mk (head orv) (RawVal::RawVal { payload = tail orv })
   where orv = arrayLookup s.array k
 
-set : Storage -> RawVal -> RawVal -> Storage
-set s k v = StorageImpl { array = arrayUpdate s.array k (0b1 # v.payload) }
+set : Storage -> RawVal::T -> RawVal::T -> Storage
+set s k v = Storage { array = arrayUpdate s.array k (0b1 # v.payload) }

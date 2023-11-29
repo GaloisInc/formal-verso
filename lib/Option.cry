@@ -1,21 +1,29 @@
 module Option where
 
+type T a = Option a
+
 type Option a =
-  { exists : Bit
+  { is_ok : Bit
   , value : a
   }
 
-unwrap_or : {a} Option a -> a -> a
-unwrap_or o def = if o.exists then o.value else def
-
 ok : {a} a -> Option a
-ok x =
-  { exists = True
-  , value = x
-  }
+ok x = mk True x
+
+mk : {a} Bit -> a -> Option a
+mk valid value = { is_ok = valid, value = value }
+
+is_ok : {a} Option a -> Bit
+is_ok o = o.is_ok
+
+unsafe_unwrap : {a} Option a -> a
+unsafe_unwrap o = o.value
+
+unwrap_or : {a} Option a -> a -> a
+unwrap_or o def = if o.is_ok then o.value else def
 
 fmap : {a, b} (Zero b) => Option a -> (a -> b) -> Option b
 fmap o f =
-  { exists = o.exists
+  { is_ok = o.is_ok
   , value = f o.value
   }

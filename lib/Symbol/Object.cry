@@ -1,0 +1,8 @@
+module Symbol::Object where
+
+import Symbol::General as General
+
+import submodule General::Object as Object
+import submodule Object::Wrapper as Wrapper
+
+type T = Wrapper::T

@@ -1,0 +1,16 @@
+module Body where
+
+type T = Body
+
+type Body = [56]
+type Major = [32]
+type Minor = [24]
+
+from_major_minor : Major -> Minor -> Body
+from_major_minor = (#)
+
+get_major : Body -> Major
+get_major = take
+
+get_minor : Body -> Minor
+get_minor = drop

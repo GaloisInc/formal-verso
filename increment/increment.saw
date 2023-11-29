@@ -7,13 +7,14 @@ mod <- mir_load_module "target/wasm32-unknown-unknown/release/deps/soroban_incre
 
 soroban <- soroban_init mod;
 
+let Storage = soroban.cry.Storage;
 let Symbol = soroban.cry.Symbol;
 
 let COUNTER = {{ Symbol::short "COUNTER" }};
 
 let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
 
-  storage <- s.storage.fresh;
+  storage <- s.fresh "storage" {| Storage::T |};
 
   let counter_val = s.storage.get storage COUNTER {| [32] |};
   count <- option.unwrap {{ Option::unwrap_or counter_val (Option::ok 0) }};
@@ -34,7 +35,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
 verify <- soroban.prepare_verify {
   instantiate = [
     ("soroban_sdk::storage::{impl#1}::set::_inst902de58461a9aaeb",
-      soroban.generic_sdk_specs.storage.set {| Symbol::Symbol |} {| [32] |})
+      soroban.generic_sdk_specs.storage.set {| Symbol::T |} {| [32] |})
   ]
 };
 

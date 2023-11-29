@@ -1,0 +1,4 @@
+module Symbol::General = General
+  { SmallTag = Symbol::SmallTag
+  , ObjectTag = Symbol::ObjectTag
+  }

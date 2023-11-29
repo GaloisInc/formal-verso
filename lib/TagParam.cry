@@ -1,0 +1,5 @@
+interface module TagParam where
+
+import Tag as Tag
+
+tag : Tag::T

@@ -1,0 +1,17 @@
+module Tag where
+
+type T = Tag
+
+type Tag = [8]
+
+u32 : Tag
+u32 = 4
+
+symbol_small : Tag
+symbol_small = 14
+
+symbol_object : Tag
+symbol_object = 74
+
+map_object : Tag
+map_object = 76

@@ -1,0 +1,51 @@
+typedef ListAPI = {
+  concats : ([[a]] -> [a]),
+  foldl : ((b -> a -> b) -> b -> [a] -> b),
+  sequence : ([m a] -> m [a])
+};
+
+typedef StringListAPI = {
+  elem : (String -> [String] -> Bool)
+};
+
+let list : ListAPI =
+
+  rec concats (xss : [[a]]) : [a] =
+    if null xss then
+      []
+    else
+      concat (head xss) (concats (tail xss)) in
+
+  rec foldl (f : b -> a -> b) (acc : b) (xs : [a]) : b =
+    if null xs then
+      acc
+    else
+      foldl f (f acc (head xs)) (tail xs) in
+
+  let sequence xs = for xs (\x -> x) in
+
+  {
+    concats = concats,
+    foldl = foldl,
+    sequence = sequence
+  };
+
+string_list <- do {
+
+  Util <- cryptol_load "Util.cry";
+
+  rec elem (x : String) (xs : [String]) : Bool =
+    if null xs then
+      false
+    else
+      let h = head xs in
+      if eval_bool {{ Util::lenPolyEq h x }} then
+        true
+      else
+        elem x (tail xs);
+
+  return ({
+    elem = elem
+  } : StringListAPI);
+
+};

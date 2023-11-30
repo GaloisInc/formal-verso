@@ -5,7 +5,7 @@ include "../lib/soroban.saw";
 
 mod <- mir_load_module "../soroban-examples/increment/target/wasm32-unknown-unknown/release/deps/soroban_increment_contract-516a4d3c39f27127.linked-mir.json";
 
-soroban <- soroban_init mod;
+soroban <- soroban_init mod ["storage", "symbol"];
 
 let Storage = soroban.cry.Storage;
 let Symbol = soroban.cry.Symbol;
@@ -22,7 +22,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
 
   s.storage.state storage;
 
-  mir_execute_func [s.mir_value.Env];
+  mir_execute_func [s.mir_value.Env ()];
 
   let count' = {{ count + 1 }};
 

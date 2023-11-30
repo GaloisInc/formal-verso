@@ -1,5 +1,7 @@
 enable_experimental;
 
+include "list.saw";
+
 typedef SorobanCry = {
   Bool_ : CryptolModule,
   RawVal : CryptolModule,
@@ -10,17 +12,17 @@ typedef SorobanCry = {
 
 typedef SorobanAdt = {
   // soroban_env_guest
-  Guest : MIRAdt,
+  Guest : (() -> MIRAdt),
   // soroban_sdk
-  Env : MIRAdt,
-  MaybeEnv : MIRAdt,
-  Storage : MIRAdt,
-  Symbol : MIRAdt,
+  Env : (() -> MIRAdt),
+  MaybeEnv : (() -> MIRAdt),
+  Storage : (() -> MIRAdt),
+  Symbol : (() -> MIRAdt),
   // soroban_env_common
-  Bool_ : MIRAdt,
-  RawVal : MIRAdt,
-  SymbolVal : MIRAdt,
-  Void : MIRAdt
+  Bool_ : (() -> MIRAdt),
+  RawVal : (() -> MIRAdt),
+  SymbolVal : (() -> MIRAdt),
+  Void : (() -> MIRAdt)
 };
 
 typedef SorobanSpecAPI = {
@@ -37,10 +39,10 @@ typedef SorobanSpecAPI = {
   fresh : (String -> Type -> MIRSetup Term),
 
   mir_value : {
-    Guest : MIRValue,
-    Env : MIRValue,
-    MaybeEnv : MIRValue,
-    Storage : MIRValue
+    Guest : (() -> MIRValue),
+    Env : (() -> MIRValue),
+    MaybeEnv : (() -> MIRValue),
+    Storage : (() -> MIRValue)
   },
   to_mir_value : (Term -> MIRValue),
   to_mir_type : (Type -> MIRType)
@@ -73,7 +75,8 @@ soroban_init <- do {
   Util <- cryptol_load "Util.cry";
   Void <- cryptol_load "Void.cry";
 
-  let soroban_init (mod : MIRModule) : TopLevel SorobanAPI = do {
+  let soroban_init (mod : MIRModule) (features : [String])
+  : TopLevel SorobanAPI = do {
 
     state <- do {
       storage <- declare_ghost_state "Soroban::storage";
@@ -90,30 +93,59 @@ soroban_init <- do {
       Void = Void
     };
 
-    let soroban_adt : SorobanAdt = {
-      // soroban_env_guest
-      Guest = mir_find_adt mod "soroban_env_guest::guest::Guest" [],
-      // soroban_sdk
-      Env = mir_find_adt mod "soroban_sdk::env::Env" [],
-      MaybeEnv = mir_find_adt mod "soroban_sdk::env::MaybeEnv" [],
-      Storage = mir_find_adt mod "soroban_sdk::storage::Storage" [],
-      Symbol = mir_find_adt mod "soroban_sdk::symbol::Symbol" [],
-      // soroban_env_common
-      Bool_ = mir_find_adt mod "soroban_env_common::raw_val::Bool" [],
-      RawVal = mir_find_adt mod "soroban_env_common::raw_val::RawVal" [],
-      SymbolVal = mir_find_adt mod "soroban_env_common::symbol::Symbol" [],
-      Void = mir_find_adt mod "soroban_env_common::raw_val::Void" []
-    };
+    let feat_implies feats (x, y) =
+      if string_list.elem x feats then concat [y] feats else feats;
+
+    let features = list.foldl feat_implies features [
+      ("storage", "bool_val"),
+      ("storage", "void_val"),
+      ("symbol", "maybe_env")
+    ];
+
+    let soroban_adt : SorobanAdt =
+      let find adt_name =
+        let adt = mir_find_adt mod adt_name [] in
+        \() -> adt in
+      let find_when feat adt_name =
+        if string_list.elem feat features then
+          find adt_name
+        else
+          \() -> run (fail (str_concats [
+            "Feature \"", feat, "\" is required for type ", adt_name
+          ])) in
+      {
+        // soroban_env_guest
+        Guest = find
+          "soroban_env_guest::guest::Guest",
+        // soroban_sdk
+        Env = find
+          "soroban_sdk::env::Env",
+        MaybeEnv = find_when "maybe_env"
+          "soroban_sdk::env::MaybeEnv",
+        Storage = find_when "storage"
+          "soroban_sdk::storage::Storage",
+        Symbol = find_when "symbol"
+          "soroban_sdk::symbol::Symbol",
+        // soroban_env_common
+        Bool_ = find_when "bool_val"
+          "soroban_env_common::raw_val::Bool",
+        RawVal = find
+          "soroban_env_common::raw_val::RawVal",
+        SymbolVal = find_when "symbol"
+          "soroban_env_common::symbol::Symbol",
+        Void = find_when "void_val"
+          "soroban_env_common::raw_val::Void"
+      };
 
     let mir_value =
-      let mir_value_Guest =
-        mir_struct_value soroban_adt.Guest [] in
-      let mir_value_Env =
-        mir_struct_value soroban_adt.Env [mir_value_Guest] in
-      let mir_value_MaybeEnv =
-        mir_struct_value soroban_adt.MaybeEnv [mir_value_Guest] in
-      let mir_value_Storage =
-        mir_struct_value soroban_adt.Storage [mir_value_Env] in
+      let mir_value_Guest () =
+        mir_struct_value (soroban_adt.Guest ()) [] in
+      let mir_value_Env () =
+        mir_struct_value (soroban_adt.Env ()) [mir_value_Guest ()] in
+      let mir_value_MaybeEnv () =
+        mir_struct_value (soroban_adt.MaybeEnv ()) [mir_value_Guest ()] in
+      let mir_value_Storage () =
+        mir_struct_value (soroban_adt.Storage ()) [mir_value_Env ()] in
       {
         Guest = mir_value_Guest,
         Env = mir_value_Env,
@@ -158,21 +190,21 @@ soroban_init <- do {
     rec to_mir_value x =
       let t = type x in
       if type_eq t {| RawVal::T |} then
-        mir_struct_value soroban_adt.RawVal [
+        mir_struct_value (soroban_adt.RawVal ()) [
           mir_term {{ x.payload }}
         ]
       else if type_eq t {| Bool_::T |} then
-        mir_struct_value soroban_adt.Bool_ [
+        mir_struct_value (soroban_adt.Bool_ ()) [
           to_mir_value {{ x.raw }}
         ]
       else if type_eq t {| Void::T |} then
-        mir_struct_value soroban_adt.Void [
+        mir_struct_value (soroban_adt.Void ()) [
           to_mir_value {{ x.raw }}
         ]
       else if type_eq t {| Symbol::T |} then
-        mir_struct_value soroban_adt.Symbol [
-          mir_value.MaybeEnv,
-          mir_struct_value soroban_adt.SymbolVal [
+        mir_struct_value (soroban_adt.Symbol ()) [
+          mir_value.MaybeEnv (),
+          mir_struct_value (soroban_adt.SymbolVal ()) [
             to_mir_value {{ x.raw }}
           ]
         ]
@@ -184,13 +216,13 @@ soroban_init <- do {
       if type_eq t {| [32] |} then
         mir_u32
       else if type_eq t {| RawVal::T |} then
-        mir_adt soroban_adt.RawVal
+        mir_adt (soroban_adt.RawVal ())
       else if type_eq t {| Bool_::T |} then
-        mir_adt soroban_adt.Bool_
+        mir_adt (soroban_adt.Bool_ ())
       else if type_eq t {| Void::T |} then
-        mir_adt soroban_adt.Void
+        mir_adt (soroban_adt.Void ())
       else if type_eq t {| Symbol::T |} then
-        mir_adt soroban_adt.Symbol
+        mir_adt (soroban_adt.Symbol ())
       else
         run (fail (str_concat (show t) " cannot be converted to MIRType"));
 
@@ -239,118 +271,101 @@ soroban_init <- do {
 
     };
 
-    let sdk_specs = {
+    let sdk_assume feat name spec =
+      if string_list.elem feat features then
+        list.sequence [mir_unsafe_assume_spec mod name (soroban_spec name spec)]
+      else
+        return [];
 
-      internal_env =
+    sdk_overridess <-
 
-        let adt_Infallible = mir_find_adt mod "core::convert::Infallible" [] in
-        let adt_ResultInfallible (t : MIRType) =
-          mir_find_adt mod "core::result::Result" [t, mir_adt adt_Infallible] in
+      let adt_Infallible = mir_find_adt mod "core::convert::Infallible" [] in
+      let adt_ResultInfallible (t : MIRType) =
+        mir_find_adt mod "core::result::Result" [t, mir_adt adt_Infallible] in
 
-        let return_ok (x : Term) : MIRSetup () =
-          mir_return
-            (mir_enum_value
-              (adt_ResultInfallible (to_mir_type (type x)))
-              "Ok"
-              [to_mir_value x]) in
+      let return_ok (x : Term) : MIRSetup () =
+        mir_return
+          (mir_enum_value
+            (adt_ResultInfallible (to_mir_type (type x)))
+            "Ok"
+            [to_mir_value x]) in
 
-        {
+      list.sequence [
 
-          has_contract_data = soroban_spec
-            "soroban_sdk::env::{impl#12}::has_contract_data"
-            (\(s : SorobanSpecAPI) -> do {
+        sdk_assume "storage" "soroban_sdk::env::{impl#12}::has_contract_data"
+          (\(s : SorobanSpecAPI) -> do {
 
-              storage <- s.fresh "storage" {| Storage::T |};
+            storage <- s.fresh "storage" {| Storage::T |};
 
-              self <- mir_alloc (mir_adt soroban_adt.Env);
-              mir_points_to self s.mir_value.Env;
+            self <- mir_alloc (mir_adt (soroban_adt.Env ()));
+            mir_points_to self (s.mir_value.Env ());
 
-              k <- s.fresh "k" {| RawVal::T |};
+            k <- s.fresh "k" {| RawVal::T |};
 
-              s.storage.state storage;
+            s.storage.state storage;
 
-              mir_execute_func [self, s.to_mir_value k];
+            mir_execute_func [self, s.to_mir_value k];
 
-              s.storage.state storage;
+            s.storage.state storage;
 
-              return_ok {{ Bool_::from_bit (Storage::has storage k) }};
+            return_ok {{ Bool_::from_bit (Storage::has storage k) }};
 
-            }),
+          }),
 
-          get_contract_data = soroban_spec
-            "soroban_sdk::env::{impl#12}::get_contract_data"
-            (\(s : SorobanSpecAPI) -> do {
+        sdk_assume "storage" "soroban_sdk::env::{impl#12}::get_contract_data"
+          (\(s : SorobanSpecAPI) -> do {
 
-              storage <- s.fresh "storage" {| Storage::T |};
+            storage <- s.fresh "storage" {| Storage::T |};
 
-              self <- mir_alloc (mir_adt soroban_adt.Env);
-              mir_points_to self s.mir_value.Env;
+            self <- mir_alloc (mir_adt (soroban_adt.Env ()));
+            mir_points_to self (s.mir_value.Env ());
 
-              k <- s.fresh "k" {| RawVal::T |};
+            k <- s.fresh "k" {| RawVal::T |};
 
-              mir_precond {{ Storage::has storage k }};
-              s.storage.state storage;
+            mir_precond {{ Storage::has storage k }};
+            s.storage.state storage;
 
-              mir_execute_func [self, s.to_mir_value k];
+            mir_execute_func [self, s.to_mir_value k];
 
-              s.storage.state storage;
+            s.storage.state storage;
 
-              return_ok {{ (Storage::get storage k).value }};
+            return_ok {{ (Storage::get storage k).value }};
 
-            }),
+          }),
 
-          put_contract_data = soroban_spec
-            "soroban_sdk::env::{impl#12}::put_contract_data"
-            (\(s : SorobanSpecAPI) -> do {
+        sdk_assume "storage" "soroban_sdk::env::{impl#12}::put_contract_data"
+          (\(s : SorobanSpecAPI) -> do {
 
-              storage <- s.fresh "storage" {| Storage::T |};
+            storage <- s.fresh "storage" {| Storage::T |};
 
-              self <- mir_alloc (mir_adt soroban_adt.Env);
-              mir_points_to self s.mir_value.Env;
+            self <- mir_alloc (mir_adt (soroban_adt.Env ()));
+            mir_points_to self (s.mir_value.Env ());
 
-              k <- s.fresh "k" {| RawVal::T |};
-              v <- s.fresh "v" {| RawVal::T |};
+            k <- s.fresh "k" {| RawVal::T |};
+            v <- s.fresh "v" {| RawVal::T |};
 
-              s.storage.state storage;
+            s.storage.state storage;
 
-              mir_execute_func [self, s.to_mir_value k, s.to_mir_value v];
+            mir_execute_func [self, s.to_mir_value k, s.to_mir_value v];
 
-              s.storage.state {{ Storage::set storage k v }};
+            s.storage.state {{ Storage::set storage k v }};
 
-              return_ok {{ Void::void }};
+            return_ok {{ Void::void }};
 
-            })
+          })
 
-        }
-
-    };
-
-    let unsafe_assume_specs (specs : [(String, MIRSetup ())]) =
-      for specs (\(name, spec) -> mir_unsafe_assume_spec mod name spec);
-
-    sdk_overrides <- unsafe_assume_specs [
-      ("soroban_sdk::env::{impl#12}::has_contract_data",
-        sdk_specs.internal_env.has_contract_data),
-      ("soroban_sdk::env::{impl#12}::get_contract_data",
-        sdk_specs.internal_env.get_contract_data),
-      ("soroban_sdk::env::{impl#12}::put_contract_data",
-        sdk_specs.internal_env.put_contract_data)
-    ];
+      ];
+    let sdk_overrides = list.concats sdk_overridess;
 
     let soroban_verify (args : SorobanVerifyArgs) =
       mir_verify mod args.fun (concat sdk_overrides args.overrides)
         args.path_sat args.spec args.proof;
 
     return {
-
       cry = soroban_cry,
-
       adt = soroban_adt,
-
       spec = soroban_spec,
-
       verify = soroban_verify
-
     };
 
   };

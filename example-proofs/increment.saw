@@ -28,7 +28,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
 
   s.storage.state (s.storage.set storage COUNTER count');
 
-  mir_return (mir_term count');
+  mir_return (s.to_mir_value count');
 
 });
 

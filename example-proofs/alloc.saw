@@ -1,0 +1,27 @@
+enable_experimental;
+
+include "../lib/list.saw";
+include "../lib/soroban.saw";
+
+mod <- mir_load_module "../soroban-examples/alloc/target/wasm32-unknown-unknown/release/deps/soroban_alloc_contract-ab4eee058b6dc0f1.linked-mir.json";
+
+soroban <- soroban_init mod [];
+
+let sum_spec count = soroban.spec "sum" (\(s : SorobanSpecAPI) -> do {
+
+  mir_execute_func [s.mir_value.Env (), s.to_mir_value {{ `count : [32] }}];
+
+  mir_return (s.to_mir_value {{ sum [0..<count] : [32] }});
+
+});
+
+for (list.range 1 10) (\count -> do {
+  print (str_concats ["Verifying sum(", show count, ")"]);
+  soroban.verify {
+    fun = "soroban_alloc_contract::{impl#1}::sum",
+    overrides = [],
+    path_sat = true,
+    spec = sum_spec count,
+    proof = z3
+  };
+});

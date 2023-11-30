@@ -1,5 +1,6 @@
 {
     "rust-analyzer.linkedProjects": [
-        "soroban-examples/increment/Cargo.toml"
+        "soroban-examples/increment/Cargo.toml",
+        "soroban-examples/alloc/Cargo.toml"
     ]
 }

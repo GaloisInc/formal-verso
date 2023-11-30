@@ -1,6 +1,8 @@
 typedef ListAPI = {
   concats : ([[a]] -> [a]),
+  map : ((a -> b) -> [a] -> [b]),
   foldl : ((b -> a -> b) -> b -> [a] -> b),
+  range : (Int -> Int -> [Int]),
   sequence : ([m a] -> m [a])
 };
 
@@ -16,17 +18,28 @@ let list : ListAPI =
     else
       concat (head xss) (concats (tail xss)) in
 
+  rec map (f : a -> b) (xs : [a]) : [b] =
+    if null xs then
+      []
+    else
+      concat [f (head xs)] (map f (tail xs)) in
+
   rec foldl (f : b -> a -> b) (acc : b) (xs : [a]) : b =
     if null xs then
       acc
     else
       foldl f (f acc (head xs)) (tail xs) in
 
+  let range (begin : Int) (end : Int) : [Int] =
+    map eval_int (eval_list {{ [begin..end] : [_][64] }}) in
+
   let sequence xs = for xs (\x -> x) in
 
   {
     concats = concats,
+    map = map,
     foldl = foldl,
+    range = range,
     sequence = sequence
   };
 

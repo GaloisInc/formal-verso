@@ -3,7 +3,7 @@ enable_experimental;
 include "../lib/option.saw";
 include "../lib/soroban.saw";
 
-mod <- mir_load_module "target/wasm32-unknown-unknown/release/deps/soroban_increment_contract-516a4d3c39f27127.linked-mir.json";
+mod <- mir_load_module "../soroban-examples/increment/target/wasm32-unknown-unknown/release/deps/soroban_increment_contract-516a4d3c39f27127.linked-mir.json";
 
 soroban <- soroban_init mod;
 

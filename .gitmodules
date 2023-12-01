@@ -1,4 +1,4 @@
 [submodule "soroban-examples"]
 	path = soroban-examples
-	url = https://github.com/qsctr/soroban-examples
+	url = https://github.com/galoisinc/soroban-examples
 	branch = formal-verso

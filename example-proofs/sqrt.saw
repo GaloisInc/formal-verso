@@ -1,0 +1,76 @@
+enable_experimental;
+
+include "../lib/option.saw";
+include "../lib/soroban.saw";
+
+mod <- mir_load_module "../extra-examples/sqrt/target/wasm32-unknown-unknown/release/deps/sqrt_contract-e07ee5799034f7fe.linked-mir.json";
+
+soroban <- soroban_init mod ["storage"];
+
+let Storage = soroban.cry.Storage;
+
+let log2_spec = soroban.spec "log2" (\(s : SorobanSpecAPI) -> do {
+  x <- s.fresh "x" {| [32] |};
+  mir_execute_func [s.to_mir_value x];
+  mir_return (s.to_mir_value {{
+    // cryptol lg2 rounds up, ours rounds down
+    if 2 ^^ y == x \/ x == 0 then y else y - 1
+    where y = lg2 x
+  }});
+});
+
+log2_ov <- soroban.verify {
+  fun = "sqrt_contract::{impl#1}::log2",
+  overrides = [],
+  path_sat = true,
+  spec = log2_spec,
+  proof = w4
+};
+
+let {{
+  // y = sqrt(x)
+  isSqrt : [32] -> [32] -> Bit
+  isSqrt x y =
+    y < 2^^16 /\ y^^2 <= x /\ (y == 2^^16 - 1 \/ (y + 1)^^2 > x)
+}};
+
+// warning: will take a while! Run with solver caching on
+prove_print w4 {{ \x y1 y2 -> isSqrt x y1 /\ isSqrt x y2 ==> y1 == y2 }};
+
+let sqrt_spec = soroban.spec "sqrt" (\(s : SorobanSpecAPI) -> do {
+  x <- s.fresh "x" {| [32] |};
+  mir_execute_func [s.to_mir_value x];
+  y <- s.fresh "y" {| [32] |};
+  mir_postcond {{ isSqrt x y }};
+  mir_return (s.to_mir_value y);
+});
+
+// warning: will take a while! Run with solver caching on
+sqrt_ov <- soroban.verify {
+  fun = "sqrt_contract::{impl#1}::sqrt",
+  overrides = [log2_ov],
+  path_sat = true,
+  spec = sqrt_spec,
+  proof = w4
+};
+
+let sqrt_cached_spec = soroban.spec "sqrt_cached" (\(s : SorobanSpecAPI) -> do {
+  storage <- s.fresh "storage" {| Storage::T |};
+  x <- s.fresh "x" {| [32] |};
+  let cached = s.storage.get storage x {| [32] |};
+  mir_precond {{ Option::ok_implies (Option::ok_and (isSqrt x)) cached }};
+  s.storage.state storage;
+  mir_execute_func [s.mir_value.Env (), s.to_mir_value x];
+  y <- s.fresh "y" {| [32] |};
+  mir_postcond {{ isSqrt x y }};
+  s.storage.state (s.storage.set storage x y);
+  mir_return (s.to_mir_value y);
+});
+
+soroban.verify {
+  fun = "sqrt_contract::{impl#1}::sqrt_cached",
+  overrides = [sqrt_ov],
+  path_sat = true,
+  spec = sqrt_cached_spec,
+  proof = w4
+};

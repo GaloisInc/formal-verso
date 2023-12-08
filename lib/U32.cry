@@ -8,7 +8,7 @@ to_raw : [32] -> RawVal::T
 to_raw u = RawVal::from_major_minor_and_tag u 0 Tag::u32
 
 is_u32 : RawVal::T -> Bit
-is_u32 = RawVal::has_tag Tag::u32
+is_u32 rv = RawVal::has_tag Tag::u32 rv /\ RawVal::get_minor rv == 0
 
 from_raw : RawVal::T -> Option::T [32]
 from_raw rv = Option::mk (is_u32 rv) (RawVal::get_major rv)

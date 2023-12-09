@@ -7,6 +7,7 @@ pub struct SqrtContract;
 #[contractimpl]
 impl SqrtContract {
 
+    /// Compute sqrt, caching results in storage
     pub fn sqrt_cached(env: Env, x: u32) -> u32 {
         match env.storage().get(&x) {
             Some(y) => y.unwrap(),

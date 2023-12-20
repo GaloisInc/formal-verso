@@ -22,8 +22,8 @@ let sum_spec count = soroban.spec "sum" (\(s : SorobanSpecAPI) -> do {
 
 });
 
-// Verify sum for count = 1 through 10
-for (list.range 1 10) (\count -> do {
+// Verify sum for count = 0 through 10
+for (list.range 0 10) (\count -> do {
   print (str_concats ["Verifying sum(", show count, ")"]);
   soroban.verify {
     fun = "soroban_alloc_contract::{impl#1}::sum",

@@ -8,6 +8,7 @@ Workbench](https://saw.galois.com/), a tool for formally verifying code in
 languages like Rust, C, Java, or Cryptol. SAW employs SAT and SMT solvers to
 streamline verification, offering SAWScript for scaling up verification to
 complex systems.
+
 A recording of the PoC demo can be found [here](https://youtu.be/cwaXmZwbXsA?feature=shared) (YT link).
 
 **Note: this project is still in its early stages, and only supports a small

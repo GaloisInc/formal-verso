@@ -35,12 +35,11 @@ This repository contains:
 
 ## Installation
 
-1. Install SAW
-   1. Clone [`saw-script`](https://github.com/GaloisInc/saw-script)
-   2. Switch to branch `soroban`
-   3. [Build from
-      source](https://github.com/GaloisInc/saw-script#manual-installation)
-   4. `cabal v2-install`
+1. Install a nightly version of [SAW](https://saw.galois.com), either
+   [prebuilt](https://github.com/GaloisInc/saw-script/actions?query=event%3Aschedule)
+   or [from
+   source](https://github.com/GaloisInc/saw-script#manual-installation)
+   1. Make sure you also install the `z3` solver
 2. [Install
    `mir-json`](https://github.com/GaloisInc/mir-json#installation-instructions)
 3. Install `crux-mir` Rust libraries

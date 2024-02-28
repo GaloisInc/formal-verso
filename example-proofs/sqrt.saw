@@ -37,6 +37,10 @@ log2_ov <- soroban.verify {
 };
 
 // Declare the specification of sqrt, expressed as a relation
+//
+// In particular, since we're working with integers, we're proving
+// y = floor(sqrt(x)), and since we're working with 32-bit machine
+// integers, stop at 65535 and avoid overflowing in the spec logic.
 let {{
   // y = sqrt(x)
   isSqrt : [32] -> [32] -> Bit

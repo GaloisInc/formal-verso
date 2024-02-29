@@ -240,8 +240,12 @@ private
    badval = val_of_body_tag 0 badtag
 
 // val.rs line 249
-submodule RawVal where
+submodule Raw where
    type T = Val
+
+   /*
+    * Inspection functions
+    */
 
    // val.rs lines 685-688
    get_payload : T -> [64]
@@ -286,30 +290,30 @@ submodule RawVal where
    get_minor : T -> [MINOR_BITS]
    get_minor v = minor_of_val v
 
-import submodule RawVal as RawVal
+import submodule Raw as Raw
 
 ////////////////////////////////////////////////////////////
 // void
 
 submodule Void where
-   newtype Void = { raw : RawVal::T }
+   newtype Void = { raw : Raw::T }
    type T = Void
 
-   raw_void : RawVal::T
-   raw_void = RawVal::singleton tag_void
+   raw_void : Raw::T
+   raw_void = Raw::singleton tag_void
 
-   valid_raw rv = RawVal::shallow_eq rv raw_void
+   valid_raw v = val_eq v raw_void
 
-   unsafe_from_raw : RawVal::T -> Void
+   unsafe_from_raw : Raw::T -> Void
    unsafe_from_raw rv = Void { raw = rv }
 
    void : Void
    void = unsafe_from_raw raw_void
 
-   from_raw : RawVal::T -> Option::T Void
+   from_raw : Raw::T -> Option::T Void
    from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
 
-   to_raw : Void -> RawVal::T
+   to_raw : Void -> Raw::T
    to_raw w = w.raw
 
    valid : Void -> Bit
@@ -324,35 +328,34 @@ unit = Void::void
 // bool
 
 submodule Bool where
-   newtype Bool = { raw : RawVal::T }
+   newtype Bool = { raw : Raw::T }
    type T = Bool
 
-   raw_true : RawVal::T
-   raw_true = RawVal::singleton tag_true
+   raw_true : Raw::T
+   raw_true = Raw::singleton tag_true
 
-   raw_false : RawVal::T
-   raw_false = RawVal::singleton tag_false
+   raw_false : Raw::T
+   raw_false = Raw::singleton tag_false
 
-   raw_from_bit : Bit -> RawVal::T
+   raw_from_bit : Bit -> Raw::T
    raw_from_bit b = if b then raw_true else raw_false
 
-   valid_raw rv = RawVal::shallow_eq rv raw_true
-               \/ RawVal::shallow_eq rv raw_false
+   valid_raw v = val_eq v raw_true \/ val_eq v raw_false
 
-   unsafe_from_raw : RawVal::T -> Bool
+   unsafe_from_raw : Raw::T -> Bool
    unsafe_from_raw rv = Bool { raw = rv }
 
-   from_raw : RawVal::T -> Option::T Bool
+   from_raw : Raw::T -> Option::T Bool
    from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
 
-   to_raw : Bool -> RawVal::T
+   to_raw : Bool -> Raw::T
    to_raw w = w.raw
 
    valid : Bool -> Bit
    valid w = valid_raw w.raw
 
    to_bit : Bool -> Bit
-   to_bit v = RawVal::shallow_eq (to_raw v) raw_true
+   to_bit v = Raw::shallow_eq (to_raw v) raw_true
 
    from_bit : Bit -> Bool
    from_bit b = unsafe_from_raw (raw_from_bit b)
@@ -363,14 +366,14 @@ import submodule Bool as Bool
 // u32
 
 submodule U32 where
-   to_raw : [32] -> RawVal::T
-   to_raw u = RawVal::from_major_minor_and_tag u 0 tag_u32val
+   to_raw : [32] -> Raw::T
+   to_raw u = Raw::from_major_minor_and_tag u 0 tag_u32val
 
-   is_u32 : RawVal::T -> Bit
-   is_u32 rv = RawVal::has_tag tag_u32val rv /\ RawVal::get_minor rv == 0
+   is_u32 : Raw::T -> Bit
+   is_u32 rv = Raw::has_tag tag_u32val rv /\ Raw::get_minor rv == 0
 
-   from_raw : RawVal::T -> Option::T [32]
-   from_raw rv = Option::mk (is_u32 rv) (RawVal::get_major rv)
+   from_raw : Raw::T -> Option::T [32]
+   from_raw rv = Option::mk (is_u32 rv) (Raw::get_major rv)
 
 import submodule U32 as U32
 
@@ -378,17 +381,17 @@ import submodule U32 as U32
 // symbol
 
 submodule Symbol where
-   newtype Symbol = { raw : RawVal::T }
+   newtype Symbol = { raw : Raw::T }
    type T = Symbol
 
-   valid_raw : RawVal::T -> Bit
-   valid_raw rv = RawVal::has_tag tag_symbolsmall rv
-               \/ RawVal::has_tag tag_symbolobject rv
+   valid_raw : Raw::T -> Bit
+   valid_raw rv = Raw::has_tag tag_symbolsmall rv
+               \/ Raw::has_tag tag_symbolobject rv
 
-   unsafe_from_raw : RawVal::T -> Symbol
+   unsafe_from_raw : Raw::T -> Symbol
    unsafe_from_raw rv = Symbol { raw = rv }
 
-   from_raw : RawVal::T -> Option::T Symbol
+   from_raw : Raw::T -> Option::T Symbol
    from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
 
    encode_char : Char -> [6]
@@ -405,7 +408,7 @@ submodule Symbol where
    valid w = valid_raw w.raw
 
    short : {n} (n <= 9) => String n -> Symbol
-   short s = unsafe_from_raw (RawVal::from_body_and_tag body tag_symbolsmall)
+   short s = unsafe_from_raw (Raw::from_body_and_tag body tag_symbolsmall)
       where body = zext (join (map encode_char s))
 
 import submodule Symbol as Symbol
@@ -435,7 +438,7 @@ type VoidT = Void::T
 type BoolT = Bool::T
 type U32T = /*U32::T*/ [32]
 type SymbolT = Symbol::T
-type RawT = RawVal::T
+type RawT = Raw::T
 
 bool_from_native = Bool::from_bit
 symbol_from_native = Symbol::short
@@ -447,5 +450,5 @@ symbol_from_raw = Symbol::from_raw
 
 u32_to_raw = U32::to_raw
 
-raw_from_payload = RawVal::from_payload
-raw_get_payload = RawVal::get_payload
+raw_from_payload = Raw::from_payload
+raw_get_payload = Raw::get_payload

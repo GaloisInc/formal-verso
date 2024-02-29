@@ -119,7 +119,7 @@ soroban_init <- do {
   //let Bool_ = cryptol_extract_submodule Values "Bool";
   //let U32 = cryptol_extract_submodule Values "U32";
   //let Symbol = cryptol_extract_submodule Values "Symbol";
-  //RawVal <- cryptol_extract_submodule Values "Raw";
+  //let Raw <- cryptol_extract_submodule Values "Raw";
 
   Storage <- cryptol_load "Storage.cry";
 
@@ -230,24 +230,24 @@ soroban_init <- do {
       eval_bool {{ Util::lenPolyEq s1 s2 }};
 
     /*
-     * Convert from a specific value type to Values::RawVal::T
+     * Convert from a specific value type to Values::Raw::T
      *
-     * to_raw : (t : Type) -> t -> Values::RawVal::T
+     * to_raw : (t : Type) -> t -> Values::Raw::T
      */
-    let to_raw (t : Type) : Term /* t -> RawVal */ =
+    let to_raw (t : Type) : Term /* t -> Raw */ =
       if type_eq t {| [32] |} then
         {{ Values::u32_to_raw }}
       else
         {{ \(s : t) -> s.raw }};
 
     /*
-     * Convert from a Values::RawVal::T to a specific value type
+     * Convert from a Values::Raw::T to a specific value type
      * (type is passed as the first argument)
      *
      * Returns None if the raw value is not actually a value
      * of the right type.
      *
-     * from_raw : (t : Type) -> Values::RawVal::T -> Option t
+     * from_raw : (t : Type) -> Values::Raw::T -> Option t
      */
     let from_raw (t : Type) : Term =
       if type_eq t {| [32] |} then
@@ -259,13 +259,13 @@ soroban_init <- do {
       else if type_eq t {| Symbol::T |} then
         {{ Values::symbol_from_raw }}
       else
-        run (fail (str_concat (show t) " cannot be converted from RawVal"));
+        run (fail (str_concat (show t) " cannot be converted from Raw"));
 
     /*
      * Check if a value of a value type is actually a valid value of
      * that type. In theory, we shouldn't ever attach types to invalid
      * values; we shouldn't ever construct any and potentially-garbage
-     * values from outside should appear first as Values::RawVal and get
+     * values from outside should appear first as Values::Raw and get
      * checked before being converted to a specific value type.
      *
      * However, the Soroban SDK rust code plays fast and loose with

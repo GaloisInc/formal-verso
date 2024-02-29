@@ -3,23 +3,25 @@ module Storage where
 import Array
 import Option as Option
 import Values as Values
-import submodule Values::RawVal as RawVal
+import submodule Values::Raw as Raw
 
 type T = Storage
 
 private
-  newtype Storage = { array : Array RawVal::T OptionRawVal }
-  // Can't use Option RawVal due to saw-script#1988
+  newtype Storage = { array : Array Raw::T OptionRawVal }
+  // Can't use Option Raw::T due to saw-script#1988
   // first bit = exists, rest = data
   type OptionRawVal = [65]
 
-has : Storage -> RawVal::T -> Bit
+has : Storage -> Raw::T -> Bit
 has s k = Option::is_ok (get s k)
 
-get : Storage -> RawVal::T -> Option::T RawVal::T
-get s k = Option::mk (head orv) (RawVal::from_payload (tail orv))
-  where orv = arrayLookup s.array k
+get : Storage -> Raw::T -> Option::T Raw::T
+get s k =
+   Option::mk (head orv) (Raw::from_payload (tail orv))
+   where orv = arrayLookup s.array k
 
-set : Storage -> RawVal::T -> RawVal::T -> Storage
-set s k v = Storage { array = arrayUpdate s.array k (0b1 # payload) }
-  where payload = RawVal::get_payload v
+set : Storage -> Raw::T -> Raw::T -> Storage
+set s k v =
+   Storage { array = arrayUpdate s.array k (0b1 # payload) }
+   where payload = Raw::get_payload v

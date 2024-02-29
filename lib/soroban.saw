@@ -252,12 +252,12 @@ soroban_init <- do {
      * from_raw : (t : Type) -> Values::Raw::T -> Option t
      */
     let from_raw (t : Type) : Term =
-      if type_eq t {| Values::U32T |} then
-        {{ Values::u32_from_raw }}
+      if type_eq t {| Values::VoidT |} then
+        {{ Values::void_from_raw }}
       else if type_eq t {| Values::BoolT |} then
         {{ Values::bool_from_raw }}
-      else if type_eq t {| Values::VoidT |} then
-        {{ Values::void_from_raw }}
+      else if type_eq t {| Values::U32T |} then
+        {{ Values::u32_from_raw }}
       else if type_eq t {| Values::SymbolT |} then
         {{ Values::symbol_from_raw }}
       else
@@ -277,10 +277,10 @@ soroban_init <- do {
      * valid : (t : Type) -> t -> Bit
      */
     let type_valid (t : Type) : Term /* t -> Bit */ =
-      if type_eq t {| Values::BoolT |} then
-        {{ Values::bool_valid }}
-      else if type_eq t {| Values::VoidT |} then
+      if type_eq t {| Values::VoidT |} then
         {{ Values::void_valid }}
+      else if type_eq t {| Values::BoolT |} then
+        {{ Values::bool_valid }}
       else if type_eq t {| Values::SymbolT |} then
         {{ Values::symbol_valid }}
       else
@@ -299,18 +299,12 @@ soroban_init <- do {
      */
     rec to_mir_value x =
       let t = type x in
-      if type_eq t {| Values::RawT |} then
-        mir_struct_value (soroban_adt.RawVal ()) [
-          // XXX: can't do this, it makes SAW unable to match specs
-          //mir_term {{ Values::raw_get_payload x }}
-          mir_term {{ x.bits }}
+      if type_eq t {| Values::VoidT |} then
+        mir_struct_value (soroban_adt.Void ()) [
+          to_mir_value {{ x.val }}
         ]
       else if type_eq t {| Values::BoolT |} then
         mir_struct_value (soroban_adt.Bool_ ()) [
-          to_mir_value {{ x.val }}
-        ]
-      else if type_eq t {| Values::VoidT |} then
-        mir_struct_value (soroban_adt.Void ()) [
           to_mir_value {{ x.val }}
         ]
       else if type_eq t {| Values::SymbolT |} then
@@ -319,6 +313,12 @@ soroban_init <- do {
           mir_struct_value (soroban_adt.SymbolVal ()) [
             to_mir_value {{ x.raw }}
           ]
+        ]
+      else if type_eq t {| Values::RawT |} then
+        mir_struct_value (soroban_adt.RawVal ()) [
+          // XXX: can't do this, it makes SAW unable to match specs
+          //mir_term {{ Values::raw_get_payload x }}
+          mir_term {{ x.bits }}
         ]
       else
         // fall back to mir_term
@@ -340,16 +340,16 @@ soroban_init <- do {
      * between the last two, which is bad.
      */
     let to_mir_type t =
-      if type_eq t {| Values::U32T |} then
-        mir_u32
-      else if type_eq t {| Values::RawT |} then
-        mir_adt (soroban_adt.RawVal ())
+      if type_eq t {| Values::VoidT |} then
+        mir_adt (soroban_adt.Void ())
       else if type_eq t {| Values::BoolT |} then
         mir_adt (soroban_adt.Bool_ ())
-      else if type_eq t {| Values::VoidT |} then
-        mir_adt (soroban_adt.Void ())
+      else if type_eq t {| Values::U32T |} then
+        mir_u32
       else if type_eq t {| Values::SymbolT |} then
         mir_adt (soroban_adt.Symbol ())
+      else if type_eq t {| Values::RawT |} then
+        mir_adt (soroban_adt.RawVal ())
       else
         run (fail (str_concat (show t) " cannot be converted to MIRType"));
 

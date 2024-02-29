@@ -235,7 +235,7 @@ soroban_init <- do {
      * to_raw : (t : Type) -> t -> Values::Raw::T
      */
     let to_raw (t : Type) : Term /* t -> Raw */ =
-      if type_eq t {| [32] |} then
+      if type_eq t {| Values::U32T |} then
         {{ Values::u32_to_raw }}
       else if type_eq t {| Values::SymbolT |} then
         {{ Values::symbol_to_raw }}
@@ -252,13 +252,13 @@ soroban_init <- do {
      * from_raw : (t : Type) -> Values::Raw::T -> Option t
      */
     let from_raw (t : Type) : Term =
-      if type_eq t {| [32] |} then
+      if type_eq t {| Values::U32T |} then
         {{ Values::u32_from_raw }}
-      else if type_eq t {| Bool_::T |} then
+      else if type_eq t {| Values::BoolT |} then
         {{ Values::bool_from_raw }}
-      else if type_eq t {| Void::T |} then
+      else if type_eq t {| Values::VoidT |} then
         {{ Values::void_from_raw }}
-      else if type_eq t {| Symbol::T |} then
+      else if type_eq t {| Values::SymbolT |} then
         {{ Values::symbol_from_raw }}
       else
         run (fail (str_concat (show t) " cannot be converted from Raw"));
@@ -278,11 +278,11 @@ soroban_init <- do {
      */
     let type_valid (t : Type) : Term /* t -> Bit */ =
       if type_eq t {| Values::BoolT |} then
-        {{ Bool_::valid }}
+        {{ Values::bool_valid }}
       else if type_eq t {| Values::VoidT |} then
-        {{ Void::valid }}
+        {{ Values::void_valid }}
       else if type_eq t {| Values::SymbolT |} then
-        {{ Symbol::valid }}
+        {{ Values::symbol_valid }}
       else
         // default to no conditions
         {{ \_ -> True }};
@@ -340,7 +340,7 @@ soroban_init <- do {
      * between the last two, which is bad.
      */
     let to_mir_type t =
-      if type_eq t {| [32] |} then
+      if type_eq t {| Values::U32T |} then
         mir_u32
       else if type_eq t {| Values::RawT |} then
         mir_adt (soroban_adt.RawVal ())

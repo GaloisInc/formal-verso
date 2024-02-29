@@ -1,16 +1,32 @@
 module Symbol where
 
 import Symbol::General as General
-import Symbol::Small as Small
-
+import submodule General::Small as General::Small
+import submodule General::Object as General::Object
 import submodule General::Wrapper as Wrapper
+
+type SmallT = General::Small::T
+type ObjectT = General::Object::T
+
+small_from_string : {n} (n <= 9) => String n -> SmallT
+small_from_string s = General::Small::from_body (zext (join (map encode_char s)))
+
+encode_char : Char -> [6]
+encode_char ch =
+  if ch == '_' then 1
+  | elem ch ['0'..'9'] then 2 + drop (ch - '0')
+  | elem ch ['A'..'Z'] then 12 + drop (ch - 'A')
+  | elem ch ['a'..'z'] then 38 + drop (ch - 'a')
+  else error
+    ("symbol bad char: encountered " # [ch]
+      # ", supported range [a-zA-Z0-9_]")
 
 type T = Symbol
 
 type Symbol = Wrapper::T
 
 short : {n} (n <= 9) => String n -> Symbol
-short s = General::from_small (Small::from_string s)
+short s = General::from_small (small_from_string s)
 
 from_raw = Wrapper::from_raw
 valid = Wrapper::valid

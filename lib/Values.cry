@@ -385,21 +385,21 @@ submodule Void where
    newtype Void = { val : Val }
    type T = Void
 
-   valid_raw v = val_eq v val_unit
-
    unit : T
    unit = Void { val = val_unit }
+
+   valid_raw v = val_eq v val_unit
+
+   valid : Void -> Bit
+   valid x = valid_raw x.val
+
+   to_raw : Void -> Raw::T
+   to_raw x = x.val
 
    from_raw : Val -> Option::T T
    from_raw b =
       if valid_raw b then Option::some (Void { val = b })
       else Option::none' (Void { val = badval })
-
-   to_raw : Void -> Raw::T
-   to_raw x = x.val
-
-   valid : Void -> Bit
-   valid x = valid_raw x.val
 
 import submodule Void as Void
 
@@ -419,21 +419,21 @@ submodule Bool where
    false : T
    false = Bool { val = val_false }
 
-   raw_from_bit : Bit -> Raw::T
-   raw_from_bit b = if b then val_true else val_false
-
    valid_raw v = val_eq v val_true \/ val_eq v val_false
+
+   valid : Bool -> Bit
+   valid b = valid_raw b.val
+
+   to_raw : Bool -> Val
+   to_raw b = b.val
 
    from_raw : Val -> Option::T T
    from_raw b =
       if valid_raw b then Option::some (Bool { val = b })
       else Option::none' (Bool { val = badval })
 
-   to_raw : Bool -> Val
-   to_raw b = b.val
-
-   valid : Bool -> Bit
-   valid b = valid_raw b.val
+   raw_from_bit : Bit -> Raw::T
+   raw_from_bit b = if b then val_true else val_false
 
    to_bit : Bool -> Bit
    to_bit b =
@@ -450,11 +450,11 @@ false = Bool::false
 // u32
 
 submodule U32 where
-   to_raw : [32] -> Raw::T
-   to_raw u = Raw::from_major_minor_and_tag u 0 tag_u32val
-
    is_u32 : Raw::T -> Bit
    is_u32 rv = Raw::has_tag tag_u32val rv /\ Raw::get_minor rv == 0
+
+   to_raw : [32] -> Raw::T
+   to_raw u = Raw::from_major_minor_and_tag u 0 tag_u32val
 
    from_raw : Raw::T -> Option::T [32]
    from_raw rv = Option::mk (is_u32 rv) (Raw::get_major rv)
@@ -472,6 +472,9 @@ submodule Symbol where
    valid_raw rv = Raw::has_tag tag_symbolsmall rv
                \/ Raw::has_tag tag_symbolobject rv
 
+   valid : Symbol -> Bit
+   valid x = valid_raw x.val
+
    to_raw : T -> Val
    to_raw x = x.val
 
@@ -479,9 +482,6 @@ submodule Symbol where
    from_raw v =
       if valid_raw v then Option::some (Symbol { val = v })
       else Option::none' (Symbol { val = badval })
-
-   valid : Symbol -> Bit
-   valid x = valid_raw x.val
 
    from_native : {n} fin n => String n -> T
    from_native x

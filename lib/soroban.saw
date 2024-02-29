@@ -237,6 +237,8 @@ soroban_init <- do {
     let to_raw (t : Type) : Term /* t -> Raw */ =
       if type_eq t {| [32] |} then
         {{ Values::u32_to_raw }}
+      else if type_eq t {| Values::SymbolT |} then
+        {{ Values::symbol_to_raw }}
       else
         {{ \(s : t) -> s.raw }};
 

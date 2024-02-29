@@ -174,6 +174,76 @@ private
 
 
 ////////////////////////////////////////////////////////////
+// small symbol encoding
+
+/*
+ * There are 63 valid symbol chars (0-9, A-Z, a-z, and _) so
+ * we can pack up to 9 of them in 54 bits of the 56-bit body
+ * field. Soroban does this in order to avoid having to materialize
+ * object-style strings in the common case, and we follow along
+ * because we're trying to use the same representations.
+ */
+
+// symbol.rs lines 99-105
+private
+   type MAX_SMALL_CHARS = 9
+   type CODE_BITS = 6
+   CODE_MASK = mask_of_width `CODE_BITS
+   // size and mask for the whole encoded string (goes in the body field)
+   type SMALLSYM_BITS = MAX_SMALL_CHARS * CODE_BITS
+   SMALLSYM_MASK = mask_of_width `SMALLSYM_BITS
+
+property SMALLSYM_BODY_BITS = `SMALLSYM_BITS + 2 == `BODY_BITS
+property CODE_MASK_BITS     = CODE_MASK     == 0x000000000000003f
+property SMALLSYM_MASK_BITS = SMALLSYM_MASK == 0x003fffffffffffff
+//prove CODE_MASK_BITS
+//prove SMALLSYM_MASK_BITS
+
+// symbol.rs lines 156-164 (plus at least one other place I can't find now)
+private
+   smallsym_body_valid : [BODY_BITS] -> Bool
+   smallsym_body_valid body = zext body == (zext body && SMALLSYM_MASK)
+
+// symbol.rs lines 229-238 (where it's "encode_byte")
+private
+   smallsym_encode : Char -> [CODE_BITS]
+   smallsym_encode ch =
+      if ch == '_' then 1
+      | elem ch ['0'..'9'] then 2 + drop (ch - '0')
+      | elem ch ['A'..'Z'] then 12 + drop (ch - 'A')
+      | elem ch ['a'..'z'] then 38 + drop (ch - 'a')
+      else error
+         ("symbol bad char: encountered " # [ch]
+           # ", supported range [a-zA-Z0-9_]")
+
+   smallsym_decode : [CODE_BITS] -> Char
+   smallsym_decode code =
+      if code == 1 then '_'
+      | elem code [2 .. 2+9] then '0' + zext (code - 2)
+      | elem code [12 .. 12+25] then 'A' + zext (code - 12)
+      | elem code [38 .. 38+25] then 'a' + zext (code - 38)
+      | code == 0 then 0 /* XXX undesirable */
+      else error "false"
+
+// symbol.rs lines 240-256 (where it's "try_from_bytes")
+//
+// XXX I'm not sure either of these handles the characters in the same
+// order as the rust code.
+//
+// XXX currently you have to know how many characters are in the
+// decoded string. This is not optimal.
+private
+   smallsym_body_of_string : {n} (n <= MAX_SMALL_CHARS) => String n -> [56]
+   smallsym_body_of_string s = zext (join (map smallsym_encode s))
+
+   smallsym_string_of_body : {n} (n <= MAX_SMALL_CHARS) => [56] -> String n
+   smallsym_string_of_body bits =
+      take`{n} ((map smallsym_decode (split`{9} bits')) : String 9)
+      where
+         bits' = drop bits : [SMALLSYM_BITS]
+
+
+////////////////////////////////////////////////////////////
 // values
 
 // XXX can't make it private; using an accessor function in
@@ -242,6 +312,18 @@ private
    val_unit = val_of_body_tag 0 tag_void
    val_true = val_of_body_tag 0 tag_true
    val_false = val_of_body_tag 0 tag_false
+
+   encode_symbolsmall s =
+      val_of_body_tag (smallsym_body_of_string s) tag_symbolsmall
+   decode_symbolsmall v =
+      smallsym_string_of_body (body_of_val v)
+
+   // XXX notyet
+   encode_symbolobject _s =
+      error "Cannot encode symbol objects yet"
+   decode_symbolobject _v =
+      error "Cannot decode symbol objects yet"
+
 
 // val.rs line 249
 submodule Raw where
@@ -383,37 +465,51 @@ import submodule U32 as U32
 // symbol
 
 submodule Symbol where
-   newtype Symbol = { raw : Raw::T }
+   newtype Symbol = { val : Val }
    type T = Symbol
 
    valid_raw : Raw::T -> Bit
    valid_raw rv = Raw::has_tag tag_symbolsmall rv
                \/ Raw::has_tag tag_symbolobject rv
 
-   unsafe_from_raw : Raw::T -> Symbol
-   unsafe_from_raw rv = Symbol { raw = rv }
+   to_raw : T -> Val
+   to_raw x = x.val
 
-   from_raw : Raw::T -> Option::T Symbol
-   from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
-
-   encode_char : Char -> [6]
-   encode_char ch =
-     if ch == '_' then 1
-     | elem ch ['0'..'9'] then 2 + drop (ch - '0')
-     | elem ch ['A'..'Z'] then 12 + drop (ch - 'A')
-     | elem ch ['a'..'z'] then 38 + drop (ch - 'a')
-     else error
-       ("symbol bad char: encountered " # [ch]
-         # ", supported range [a-zA-Z0-9_]")
+   from_raw : Val -> Option::T T
+   from_raw v =
+      if valid_raw v then Option::some (Symbol { val = v })
+      else Option::none' (Symbol { val = badval })
 
    valid : Symbol -> Bit
-   valid w = valid_raw w.raw
+   valid x = valid_raw x.val
 
-   short : {n} (n <= 9) => String n -> Symbol
-   short s = unsafe_from_raw (Raw::from_body_and_tag body tag_symbolsmall)
-      where body = zext (join (map encode_char s))
+   from_native : {n} fin n => String n -> T
+   from_native x
+      | n <= MAX_SMALL_CHARS => Symbol { val = encode_symbolsmall x }
+      | n > MAX_SMALL_CHARS => Symbol { val = encode_symbolobject x }
 
-import submodule Symbol as Symbol
+   /*
+    * XXX this doesn't work
+    */
+/*
+   to_native : {n} fin n => T -> String n
+   to_native x =
+      if tag == tag_symbolsmall then decode_symbolsmall x.val
+      else decode_symbolobject x.val
+      where
+         tag = tag_of_val x.val
+*/
+
+   /* workarounds: */
+   is_small : T -> Bool
+   is_small x = tag_of_val x.val == tag_symbolsmall
+
+   to_native_small : {n} n <= MAX_SMALL_CHARS => T -> String n
+   to_native_small x = decode_symbolsmall x.val
+
+   to_native_object : {n} n > MAX_SMALL_CHARS => T -> String n
+   to_native_object x = decode_symbolobject x.val
+
 
 ////////////////////////////////////////////////////////////
 // vecobject
@@ -443,7 +539,7 @@ type SymbolT = Symbol::T
 type RawT = Raw::T
 
 bool_from_native = Bool::from_bit
-symbol_from_native = Symbol::short
+symbol_from_native = Symbol::from_native
 
 void_from_raw = Void::from_raw
 bool_from_raw = Bool::from_raw
@@ -451,6 +547,7 @@ u32_from_raw = U32::from_raw
 symbol_from_raw = Symbol::from_raw
 
 u32_to_raw = U32::to_raw
+symbol_to_raw = Symbol::to_raw
 
 raw_from_payload = Raw::from_payload
 raw_get_payload = Raw::get_payload

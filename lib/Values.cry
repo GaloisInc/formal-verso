@@ -1,38 +1,177 @@
+/*
+ * Soroban SDK values.
+ *
+ * This is intentionally supposed to have the same bit encoding as the
+ * Soroban SDK. See src/val.rs in soroban-env-common, plus also a few
+ * other modules like num.rs.
+ *
+ * Values are a tagged union stored in a 64-bit machine integer, where
+ * the lower 8 bits are used as a type tag. The remaining 56 bits are
+ * (in some cases) divided into a 32-bit major part and 24-bit minor
+ * part. The major part is the upper half of the full 64-bit value.
+ * That is:
+ *      63       32  31        8  7       0
+ *     |-- major --||-- minor --||-- tag --|
+ *
+ * The type Val is this type-tagged representation of any Soroban
+ * value.
+ *
+ * The following types are wrappers around it theoretically restricted
+ * to the values corresponding to their type, as in the Rust code:
+ *    Void::T
+ *    Bool::T
+ *    U32::T
+ *     :
+ *
+ * The layout of this module is intended to mirror val.rs, though it's
+ * difficult to do exactly.
+ *
+ * Also, my intent is to not let the type tags escape from this module,
+ * which is somewhat in conflict with the desire to match val.rs.
+ *
+ * Note: i'm using math ints for bit sizes and widths, not because
+ * they need to be unbounded, but in the hopes that accidentally
+ * mixing sizes with values or pieces of values will reliably lead to
+ * type errors.
+ */
+
 module Values where
 
 import Option as Option
 
 ////////////////////////////////////////////////////////////
+// fields
+// val.rs lines 20-41
+
+// Sizes
+private
+   type WORD_BITS  = 64
+   type TAG_BITS   =  8
+   type BODY_BITS  = 56
+   type MAJOR_BITS = 32
+   type MINOR_BITS = 24
+
+// trivial but worth stating and crosschecking
+property BODY_TAG_WORD_BITS    = `BODY_BITS  + `TAG_BITS   == `WORD_BITS
+property MAJOR_MINOR_BODY_BITS = `MAJOR_BITS + `MINOR_BITS == `BODY_BITS
+// apparently you can't do this except by loading the file and running
+// :prove from the repl :-(
+//prove MAJOR_MINOR_BODY_BITS
+//prove BODY_TAG_WORD_BITS
+
+// Masks
+//
+// In keeping with tag.rs we'll use FOO_MASK to mean a right-aligned
+// mask of the proper size; the intended usage for extracting a field
+// is apparently
+//    (val >> shift-amount) && FOO_MASK
+// but val.rs doesn't seem to define constants for the shift amounts.
+//
+// We'll also define FOO_SHIFT as the shift amounts.
+//
+
+private
+   mask_of_width : Integer -> [64]
+   mask_of_width w = (1 << w) - 1
+
+   TAG_MASK   = mask_of_width `TAG_BITS
+   BODY_MASK  = mask_of_width `BODY_BITS
+   MAJOR_MASK = mask_of_width `MAJOR_BITS
+   MINOR_MASK = mask_of_width `MINOR_BITS
+
+   TAG_SHIFT   = 0 : Integer
+   BODY_SHIFT  = `TAG_BITS
+   MAJOR_SHIFT = `MINOR_BITS + `TAG_BITS
+   MINOR_SHIFT = `TAG_BITS
+
+// check these came out as expected
+property TAG_MASK_BITS   = TAG_MASK   == 0x00000000000000ff
+property BODY_MASK_BITS  = BODY_MASK  == 0x00ffffffffffffff
+property MAJOR_MASK_BITS = MAJOR_MASK == 0x00000000ffffffff
+property MINOR_MASK_BITS = MINOR_MASK == 0x0000000000ffffff
+property TAG_MASK_SHIFTED   = (TAG_MASK << TAG_SHIFT)     == 0x00000000000000ff
+property BODY_MASK_SHIFTED  = (BODY_MASK << BODY_SHIFT)   == 0xffffffffffffff00
+property MAJOR_MASK_SHIFTED = (MAJOR_MASK << MAJOR_SHIFT) == 0xffffffff00000000
+property MINOR_MASK_SHIFTED = (MINOR_MASK << MINOR_SHIFT) == 0x00000000ffffff00
+//prove TAG_MASK_BITS
+//prove BODY_MASK_BITS
+//prove MAJOR_MASK_BITS
+//prove MINOR_MASK_BITS
+//prove TAG_MASK_SHIFTED
+//prove BODY_MASK_SHIFTED
+//prove MAJOR_MASK_SHIFTED
+//prove MINOR_MASK_SHIFTED
+
+
+////////////////////////////////////////////////////////////
 // type tags
+// val.rs 42-157
 
-submodule Tag where
+private
+   type Tag = [TAG_BITS]
 
-   type T = Tag
+/*
+ * These magic numbers are the ones used in val.rs.
+ *
+ * Commented-out ones are those we don't use yet.
+ */
 
-   type Tag = [8]
+private
+   tag_false = 0 : Tag
+   tag_true = 1 : Tag
+   tag_void = 2 : Tag
+   //tag_error = 3 : Tag
+   tag_u32val = 4 : Tag
+   tag_i32val = 5 : Tag
+   //tag_u64small = 6 : Tag
+   //tag_i64small = 7 : Tag
+   //tag_timepointsmall = 8 : Tag
+   //tag_durationsmall = 9 : Tag
+   //tag_u128small = 10 : Tag
+   //tag_i128small = 11 : Tag
+   //tag_u256small = 12 : Tag
+   //tag_i256small = 13 : Tag
+   tag_symbolsmall = 14 : Tag
 
-   false : Tag
-   false = 0
+   // upper bound of "small" types and lower bound of "object" types
+   // (these are called "code" rather than "tag" in the sdk source;
+   // for now at least I'm proceeding on the assumption that the lack
+   // of correspondence between here and there is less important than
+   // consistency of naming here)
+   small_tag_upper_bound = 15 : Tag
+   object_tag_lower_bound = 63 : Tag
 
-   true : Tag
-   true = 1
+   //tag_u64object = 64 : Tag
+   //tag_i64object = 65 : Tag
+   //tag_timepointobject = 66 : Tag
+   //tag_durationobject = 67 : Tag
+   //tag_u128object = 68 : Tag
+   //tag_i128object = 69 : Tag
+   //tag_u256object = 70 : Tag
+   //tag_i256object = 71 : Tag
+   //tag_bytesobject = 72 : Tag
+   //tag_stringobject = 73 : Tag
+   tag_symbolobject = 74 : Tag
+   //tag_vecobject = 75 : Tag
+   tag_mapobject = 76 : Tag
+   //tag_addressobject = 77 : Tag
 
-   void : Tag
-   void = 2
+   // correspondingly, upper bound of "object" types
+   object_tag_upper_bound = 78 : Tag
 
-   u32 : Tag
-   u32 = 4
+   // tag for invalid values
+   badtag = 0x7f : Tag
 
-   symbol_small : Tag
-   symbol_small = 14
+//
+// checks on type tags
+//
 
-   symbol_object : Tag
-   symbol_object = 74
+// val.rs lines 170-178
+private
+   tag_is_object : Tag -> Bool
+   tag_is_object x =
+      (x > object_tag_lower_bound) && (x < object_tag_upper_bound)
 
-   map_object : Tag
-   map_object = 76
-
-import submodule Tag as Tag
 
 ////////////////////////////////////////////////////////////
 // values
@@ -66,23 +205,23 @@ submodule RawVal where
    shallow_eq : RawVal -> RawVal -> Bit
    shallow_eq x y = x.payload == y.payload
 
-   has_tag : Tag::T -> RawVal -> Bit
+   has_tag : Tag -> RawVal -> Bit
    has_tag t rv = get_tag rv == t
 
    from_symbol_small : Body::T -> RawVal
-   from_symbol_small body = from_body_and_tag body Tag::symbol_small
+   from_symbol_small body = from_body_and_tag body tag_symbolsmall
 
-   from_body_and_tag : Body::T -> Tag::T -> RawVal
+   from_body_and_tag : Body::T -> Tag -> RawVal
    from_body_and_tag body tag = RawVal { payload = body # tag }
 
-   from_major_minor_and_tag : Body::Major -> Body::Minor -> Tag::T -> RawVal
+   from_major_minor_and_tag : Body::Major -> Body::Minor -> Tag -> RawVal
    from_major_minor_and_tag major minor =
      from_body_and_tag (Body::from_major_minor major minor)
 
-   singleton : Tag::T -> RawVal
+   singleton : Tag -> RawVal
    singleton = from_body_and_tag 0
 
-   get_tag : RawVal -> Tag::T
+   get_tag : RawVal -> Tag
    get_tag rv = drop rv.payload
 
    get_body : RawVal -> Body::T
@@ -104,7 +243,7 @@ submodule Void where
    type T = Void
 
    raw_void : RawVal::T
-   raw_void = RawVal::singleton Tag::void
+   raw_void = RawVal::singleton tag_void
 
    valid_raw rv = RawVal::shallow_eq rv raw_void
 
@@ -136,10 +275,10 @@ submodule Bool where
    type T = Bool
 
    raw_true : RawVal::T
-   raw_true = RawVal::singleton Tag::true
+   raw_true = RawVal::singleton tag_true
 
    raw_false : RawVal::T
-   raw_false = RawVal::singleton Tag::false
+   raw_false = RawVal::singleton tag_false
 
    raw_from_bit : Bit -> RawVal::T
    raw_from_bit b = if b then raw_true else raw_false
@@ -172,10 +311,10 @@ import submodule Bool as Bool
 
 submodule U32 where
    to_raw : [32] -> RawVal::T
-   to_raw u = RawVal::from_major_minor_and_tag u 0 Tag::u32
+   to_raw u = RawVal::from_major_minor_and_tag u 0 tag_u32val
 
    is_u32 : RawVal::T -> Bit
-   is_u32 rv = RawVal::has_tag Tag::u32 rv /\ RawVal::get_minor rv == 0
+   is_u32 rv = RawVal::has_tag tag_u32val rv /\ RawVal::get_minor rv == 0
 
    from_raw : RawVal::T -> Option::T [32]
    from_raw rv = Option::mk (is_u32 rv) (RawVal::get_major rv)
@@ -190,8 +329,8 @@ submodule Symbol where
    type T = Symbol
 
    valid_raw : RawVal::T -> Bit
-   valid_raw rv = RawVal::has_tag Tag::symbol_small rv
-               \/ RawVal::has_tag Tag::symbol_object rv
+   valid_raw rv = RawVal::has_tag tag_symbolsmall rv
+               \/ RawVal::has_tag tag_symbolobject rv
 
    unsafe_from_raw : RawVal::T -> Symbol
    unsafe_from_raw rv = Symbol { raw = rv }
@@ -213,7 +352,7 @@ submodule Symbol where
    valid w = valid_raw w.raw
 
    short : {n} (n <= 9) => String n -> Symbol
-   short s = unsafe_from_raw (RawVal::from_body_and_tag body Tag::symbol_small)
+   short s = unsafe_from_raw (RawVal::from_body_and_tag body tag_symbolsmall)
       where body = zext (join (map encode_char s))
 
 import submodule Symbol as Symbol

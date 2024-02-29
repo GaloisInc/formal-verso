@@ -1,7 +1,0 @@
-module Bool::Val = Wrapper where
-
-import RawVal as RawVal
-import Bool::Raw as Raw
-
-valid_raw rv = RawVal::shallow_eq rv Raw::true
-            \/ RawVal::shallow_eq rv Raw::false

@@ -380,67 +380,70 @@ import submodule Raw as Raw
 
 ////////////////////////////////////////////////////////////
 // void
+// val.rs lines 278-292, 771-774
 
 submodule Void where
-   newtype Void = { val : Val }
-   type T = Void
+   newtype T = { val : Val }
 
    unit : T
-   unit = Void { val = val_unit }
+   unit = T { val = val_unit }
 
-   valid_raw v = val_eq v val_unit
+   valid' : Val -> Bool
+   valid' v = val_eq v val_unit
 
-   valid : Void -> Bit
-   valid x = valid_raw x.val
+   valid : T -> Bool
+   valid x = valid' x.val
 
-   to_raw : Void -> Raw::T
+   to_raw : T -> Val
    to_raw x = x.val
 
    from_raw : Val -> Option::T T
-   from_raw b =
-      if valid_raw b then Option::some (Void { val = b })
-      else Option::none' (Void { val = badval })
+   from_raw x =
+      if valid' x then Option::some (T { val = x })
+      else Option::none' (T { val = badval })
 
-import submodule Void as Void
+   to_native : T -> ()
+   to_native _ = ()
+
+   from_native : () -> T
+   from_native () = unit
 
 unit = Void::unit
 
 
 ////////////////////////////////////////////////////////////
 // bool
+// val.rs lines 294-327, 776-780, 810-11
 
 submodule Bool where
-   newtype Bool = { val : Val }
-   type T = Bool
+   newtype T = { val : Val }
 
    true : T
-   true = Bool { val = val_true }
+   true = T { val = val_true }
 
    false : T
-   false = Bool { val = val_false }
+   false = T { val = val_false }
 
-   valid_raw v = val_eq v val_true \/ val_eq v val_false
+   valid' : Val -> Bool
+   valid' v = val_eq v val_true \/ val_eq v val_false
 
-   valid : Bool -> Bit
-   valid b = valid_raw b.val
+   valid : T -> Bool
+   valid b = valid' b.val
 
-   to_raw : Bool -> Val
+   to_raw : T -> Val
    to_raw b = b.val
 
    from_raw : Val -> Option::T T
    from_raw b =
-      if valid_raw b then Option::some (Bool { val = b })
-      else Option::none' (Bool { val = badval })
+      if valid' b then Option::some (T { val = b })
+      else Option::none' (T { val = badval })
 
-   raw_from_bit : Bit -> Raw::T
-   raw_from_bit b = if b then val_true else val_false
-
-   to_bit : Bool -> Bit
-   to_bit b =
+   to_native : T -> Bool
+   to_native b =
       if val_eq b.val true.val then True else False
 
-   from_bit : Bit -> Bool
-   from_bit b = if b then true else false
+   from_native : Bool -> T
+   from_native b = if b then true else false
 
 true = Bool::true
 false = Bool::false
@@ -450,43 +453,46 @@ false = Bool::false
 // u32
 
 submodule U32 where
-   is_u32 : Raw::T -> Bit
-   is_u32 rv = Raw::has_tag tag_u32val rv /\ Raw::get_minor rv == 0
+   valid' : Val -> Bool
+   valid' v = tag_of_val v == tag_u32val /\ minor_of_val v == 0
 
    to_raw : [32] -> Raw::T
    to_raw u = Raw::from_major_minor_and_tag u 0 tag_u32val
 
    from_raw : Raw::T -> Option::T [32]
-   from_raw rv = Option::mk (is_u32 rv) (Raw::get_major rv)
+   from_raw rv = Option::mk (valid' rv) (major_of_val rv)
 
 import submodule U32 as U32
 
 ////////////////////////////////////////////////////////////
 // symbol
+// symbol.rs (more or less all of it)
 
 submodule Symbol where
-   newtype Symbol = { val : Val }
-   type T = Symbol
+   newtype T = { val : Val }
 
-   valid_raw : Raw::T -> Bit
-   valid_raw rv = Raw::has_tag tag_symbolsmall rv
-               \/ Raw::has_tag tag_symbolobject rv
+   valid' : Val -> Bool
+   valid' v =
+      (tag == tag_symbolsmall /\ smallsym_body_valid (body_of_val v)) \/
+      (tag == tag_symbolobject /\ False /* XXX notyet */ )
+      where
+         tag = tag_of_val v
 
-   valid : Symbol -> Bit
-   valid x = valid_raw x.val
+   valid : T -> Bool
+   valid x = valid' x.val
 
    to_raw : T -> Val
    to_raw x = x.val
 
    from_raw : Val -> Option::T T
    from_raw v =
-      if valid_raw v then Option::some (Symbol { val = v })
-      else Option::none' (Symbol { val = badval })
+      if valid' v then Option::some (T { val = v })
+      else Option::none' (T { val = badval })
 
    from_native : {n} fin n => String n -> T
    from_native x
-      | n <= MAX_SMALL_CHARS => Symbol { val = encode_symbolsmall x }
-      | n > MAX_SMALL_CHARS => Symbol { val = encode_symbolobject x }
+      | n <= MAX_SMALL_CHARS => T { val = encode_symbolsmall x }
+      | n > MAX_SMALL_CHARS => T { val = encode_symbolobject x }
 
    /*
     * XXX this doesn't work
@@ -538,7 +544,7 @@ type U32T = /*U32::T*/ [32]
 type SymbolT = Symbol::T
 type RawT = Raw::T
 
-bool_from_native = Bool::from_bit
+bool_from_native = Bool::from_native
 symbol_from_native = Symbol::from_native
 
 void_from_raw = Void::from_raw

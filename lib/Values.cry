@@ -589,8 +589,16 @@ type U32T = /*U32::T*/ [32]
 type SymbolT = Symbol::T
 type RawT = Raw::T
 
+// don't do this; it seems to crash (XXX: figure out why and fix it)
+//raw_valid = Raw::val_is_good
+raw_valid : Raw::T -> Bool
+raw_valid _ = True
+
 bool_from_native = Bool::from_native
 symbol_from_native = Symbol::from_native
+
+void_to_native = Void::to_native
+bool_to_native = Bool::to_native
 
 void_from_raw = Void::from_raw
 bool_from_raw = Bool::from_raw

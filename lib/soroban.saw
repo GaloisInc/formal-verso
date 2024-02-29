@@ -234,20 +234,24 @@ soroban_init <- do {
      *
      * to_raw : (t : Type) -> t -> Values::Raw::T
      */
-    let to_raw (t : Type) : Term /* t -> Raw */ =
-      if type_eq t {| Values::U32T |} then
+    let to_raw (t : Type) : Term =
+      if type_eq t {| Values::VoidT |} then
+        {{ Values::void_to_raw }}
+      else if type_eq t {| Values::BoolT |} then
+        {{ Values::bool_to_raw }}
+      else if type_eq t {| Values::U32T |} then
         {{ Values::u32_to_raw }}
       else if type_eq t {| Values::SymbolT |} then
         {{ Values::symbol_to_raw }}
       else
-        {{ \(s : t) -> s.raw }};
+        run (fail (str_concat (show t) " cannot be converted to Raw"));
 
     /*
      * Convert from a Values::Raw::T to a specific value type
      * (type is passed as the first argument)
      *
      * Returns None if the raw value is not actually a value
-     * of the right type.
+     * of the right type. Crashes if the type is wrong.
      *
      * from_raw : (t : Type) -> Values::Raw::T -> Option t
      */
@@ -281,11 +285,18 @@ soroban_init <- do {
         {{ Values::void_valid }}
       else if type_eq t {| Values::BoolT |} then
         {{ Values::bool_valid }}
+      else if type_eq t {| Values::U32T |} then
+        {{ Values::u32_valid }}
       else if type_eq t {| Values::SymbolT |} then
         {{ Values::symbol_valid }}
+      else if type_eq t {| Values::RawT |} then
+        {{ Values::raw_valid }}
+      else if type_eq t {| Storage::T |} then
+        // XXX: this gets passed here, but shouldn't be. ignore it
+        // (this logic is for value types!)
+        {{ \_ -> True }}
       else
-        // default to no conditions
-        {{ \_ -> True }};
+        run (fail (str_concat (show t) " has no validity predicate"));
 
     /*
      * Convert a value of a value type (recall the value types are
@@ -314,6 +325,8 @@ soroban_init <- do {
             to_mir_value {{ x.raw }}
           ]
         ]
+      else if type_eq t {| Values::U32T |} then
+        mir_term x
       else if type_eq t {| Values::RawT |} then
         mir_struct_value (soroban_adt.RawVal ()) [
           // XXX: can't do this, it makes SAW unable to match specs
@@ -321,8 +334,7 @@ soroban_init <- do {
           mir_term {{ x.bits }}
         ]
       else
-        // fall back to mir_term
-        mir_term x;
+        run (fail (str_concat (show t) " cannot be converted to a MIR value"));
 
     /*
      * Extract the MIR-level type for type T.

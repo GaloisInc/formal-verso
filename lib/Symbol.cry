@@ -1,6 +1,92 @@
 module Symbol where
 
-import Symbol::General as General
+import Option as Option
+import RawVal as RawVal
+import Tag as Tag
+import Body as Body
+
+submodule General where
+
+   small_tag : Tag::T
+   small_tag = Tag::symbol_small
+
+   object_tag : Tag::T
+   object_tag = Tag::symbol_object
+
+   submodule Small where
+      valid_raw : RawVal::T -> Bit
+      valid_raw = RawVal::has_tag small_tag
+
+      type T = Small
+      newtype Small = { raw : RawVal::T }
+
+      to_raw : Small -> RawVal::T
+      to_raw w = w.raw
+
+      from_raw : RawVal::T -> Option::T Small
+      from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
+
+      unsafe_from_raw : RawVal::T -> Small
+      unsafe_from_raw rv = Small { raw = rv }
+
+      valid : Small -> Bit
+      valid w = valid_raw w.raw
+
+      from_body : Body::T -> Small
+      from_body body = unsafe_from_raw (RawVal::from_body_and_tag body small_tag)
+   // end of Small
+
+   submodule Object where
+      valid_raw : RawVal::T -> Bit
+      valid_raw = RawVal::has_tag object_tag
+
+      type T = Object
+      newtype Object = { raw : RawVal::T }
+
+      to_raw : Object -> RawVal::T
+      to_raw w = w.raw
+
+      from_raw : RawVal::T -> Option::T Object
+      from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
+
+      unsafe_from_raw : RawVal::T -> Object
+      unsafe_from_raw rv = Object { raw = rv }
+
+      valid : Object -> Bit
+      valid w = valid_raw w.raw
+
+      from_body : Body::T -> Object
+      from_body body = unsafe_from_raw (RawVal::from_body_and_tag body object_tag)
+   // end of Object
+
+   submodule Wrapper where
+      valid_raw : RawVal::T -> Bit
+      valid_raw rv = RawVal::has_tag small_tag rv
+                  \/ RawVal::has_tag object_tag rv
+
+      type T = Wrapper
+      newtype Wrapper = { raw : RawVal::T }
+
+      to_raw : Wrapper -> RawVal::T
+      to_raw w = w.raw
+
+      from_raw : RawVal::T -> Option::T Wrapper
+      from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
+
+      unsafe_from_raw : RawVal::T -> Wrapper
+      unsafe_from_raw rv = Wrapper { raw = rv }
+
+      valid : Wrapper -> Bit
+      valid w = valid_raw w.raw
+
+   type T = Wrapper::T
+
+   from_small : Small::Small -> Wrapper::T
+   from_small s = Wrapper::unsafe_from_raw (Small::to_raw s)
+
+   from_object : Object::Object -> Wrapper::T
+   from_object o = Wrapper::unsafe_from_raw (Object::to_raw o)
+
 import submodule General::Small as General::Small
 import submodule General::Object as General::Object
 import submodule General::Wrapper as Wrapper

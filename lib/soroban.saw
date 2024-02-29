@@ -2,6 +2,10 @@ enable_experimental;
 
 include "list.saw";
 
+/*
+ * Cryptol modules we're using that are used after initialization and
+ * therefore need to get passed around.
+ */
 typedef SorobanCry = {
   Values : CryptolModule,
   //Void : CryptolModule,
@@ -12,15 +16,20 @@ typedef SorobanCry = {
   Storage : CryptolModule
 };
 
+/*
+ * Symbols extracted from the MIR
+ */
 typedef SorobanAdt = {
-  // soroban_env_guest
+  // from the soroban_env_guest crate
   Guest : (() -> MIRAdt),
-  // soroban_sdk
+
+  // from the soroban_sdk crate
   Env : (() -> MIRAdt),
   MaybeEnv : (() -> MIRAdt),
   Storage : (() -> MIRAdt),
   Symbol : (() -> MIRAdt),
-  // soroban_env_common
+
+  // from the soroban_env_common crate
   Bool_ : (() -> MIRAdt),
   RawVal : (() -> MIRAdt),
   SymbolVal : (() -> MIRAdt),
@@ -51,6 +60,9 @@ typedef SorobanSpecAPI = {
 
 };
 
+/*
+ * Args passed to verify
+ */
 typedef SorobanVerifyArgs = {
   fun : String,
   overrides : [MIRSpec],
@@ -59,6 +71,13 @@ typedef SorobanVerifyArgs = {
   proof : ProofScript ()
 };
 
+/*
+ * Material returned by the init function for use by the actual specs:
+ *    - Cryptol modules
+ *    - references to MIR symbols from the SDK
+ *    - spec wrapper function
+ *    - verify wrapper function
+ */
 typedef SorobanAPI = {
   cry: SorobanCry,
   adt : SorobanAdt,
@@ -66,7 +85,25 @@ typedef SorobanAPI = {
   verify : (SorobanVerifyArgs -> TopLevel MIRSpec)
 };
 
+/*
+ * Function to initialize the stuff in here.
+ *
+ * Arguments are:
+ *    mod : MirModule
+ *    features : [String]
+ *
+ * mod is the results of mir_load_module on the linked_mir.json file
+ * containing the stuff we're trying to verify.
+ *
+ * The features list is a list of arbitrary strings naming things the
+ * rust code is using; it prevents us from looking for MIR symbols
+ * that don't exist.
+ */
 soroban_init <- do {
+
+  /*
+   * Load the cryptol modules.
+   */
 
   Util <- cryptol_load "Util.cry";
   Option <- cryptol_load "Option.cry";
@@ -85,6 +122,10 @@ soroban_init <- do {
   //RawVal <- cryptol_extract_submodule Values "Raw";
 
   Storage <- cryptol_load "Storage.cry";
+
+  /*
+   * I'm not sure what this layer of indirection buys us.
+   */
 
   let soroban_init (mod : MIRModule) (features : [String])
   : TopLevel SorobanAPI = do {
@@ -116,21 +157,31 @@ soroban_init <- do {
     ];
 
     let soroban_adt : SorobanAdt =
+      /*
+       * Tools for looking up stuff in the MIR.
+       */
       let find adt_name =
         let adt = mir_find_adt mod adt_name [] in
-        \() -> adt in
+        \() -> adt
+      in
       let find_when feat adt_name =
         if string_list.elem feat features then
           find adt_name
         else
           \() -> run (fail (str_concats [
             "Feature \"", feat, "\" is required for type ", adt_name
-          ])) in
+          ]))
+      in
+
+      /*
+       * Bind handles for various SDK types.
+       */
       {
-        // soroban_env_guest
+        // from the soroban_env_guest crate
         Guest = find
           "soroban_env_guest::guest::Guest",
-        // soroban_sdk
+
+        // from the soroban_sdk crate
         Env = find
           "soroban_sdk::env::Env",
         MaybeEnv = find_when "maybe_env"
@@ -139,7 +190,8 @@ soroban_init <- do {
           "soroban_sdk::storage::Storage",
         Symbol = find_when "symbol"
           "soroban_sdk::symbol::Symbol",
-        // soroban_env_common
+
+        // from the soroban_env_common crate
         Bool_ = find_when "bool_val"
           "soroban_env_common::raw_val::Bool",
         RawVal = find
@@ -150,6 +202,9 @@ soroban_init <- do {
           "soroban_env_common::raw_val::Void"
       };
 
+    /*
+     * Bind mir_values for things.
+     */
     let mir_value =
       let mir_value_Guest () =
         mir_struct_value (soroban_adt.Guest ()) [] in
@@ -166,18 +221,35 @@ soroban_init <- do {
         Storage = mir_value_Storage
       };
 
+    /*
+     * Hook for dynamic type dispatch on the value types.
+     */
     let type_eq (t1 : Type) (t2 : Type) : Bool =
       let s1 = show t1 in
       let s2 = show t2 in
       eval_bool {{ Util::lenPolyEq s1 s2 }};
 
+    /*
+     * Convert from a specific value type to Values::RawVal::T
+     *
+     * to_raw : (t : Type) -> t -> Values::RawVal::T
+     */
     let to_raw (t : Type) : Term /* t -> RawVal */ =
       if type_eq t {| [32] |} then
         {{ Values::u32_to_raw }}
       else
         {{ \(s : t) -> s.raw }};
 
-    let from_raw (t : Type) : Term /* RawVal -> Option t */ =
+    /*
+     * Convert from a Values::RawVal::T to a specific value type
+     * (type is passed as the first argument)
+     *
+     * Returns None if the raw value is not actually a value
+     * of the right type.
+     *
+     * from_raw : (t : Type) -> Values::RawVal::T -> Option t
+     */
+    let from_raw (t : Type) : Term =
       if type_eq t {| [32] |} then
         {{ Values::u32_from_raw }}
       else if type_eq t {| Bool_::T |} then
@@ -189,6 +261,19 @@ soroban_init <- do {
       else
         run (fail (str_concat (show t) " cannot be converted from RawVal"));
 
+    /*
+     * Check if a value of a value type is actually a valid value of
+     * that type. In theory, we shouldn't ever attach types to invalid
+     * values; we shouldn't ever construct any and potentially-garbage
+     * values from outside should appear first as Values::RawVal and get
+     * checked before being converted to a specific value type.
+     *
+     * However, the Soroban SDK rust code plays fast and loose with
+     * unsafe casts and we want to interoperate with it as much as
+     * possible.
+     *
+     * valid : (t : Type) -> t -> Bit
+     */
     let type_valid (t : Type) : Term /* t -> Bit */ =
       if type_eq t {| Values::BoolT |} then
         {{ Bool_::valid }}
@@ -200,6 +285,16 @@ soroban_init <- do {
         // default to no conditions
         {{ \_ -> True }};
 
+    /*
+     * Convert a value of a value type (recall the value types are
+     * Cryptol types and have Cryptol values) to a mir_term.
+     *
+     * XXX: should this be converting to "native" (plain cryptol
+     * values that are not Soroban SDK tagged values) which then
+     * presumably get converted back to the Rust tagged implementation
+     * on the MIR side, or should we be passing the representation
+     * across in all cases and not just the raw case?
+     */
     rec to_mir_value x =
       let t = type x in
       if type_eq t {| Values::RawT |} then
@@ -225,6 +320,21 @@ soroban_init <- do {
         // fall back to mir_term
         mir_term x;
 
+    /*
+     * Extract the MIR-level type for type T.
+     *
+     * This function is the type-level version of to_mir_value, and
+     * uses the same types as returned by to_native.
+     *
+     * XXX: except that's wrong... and we maybe need name reform,
+     * because there's _three_ types for any given Soroban value:
+     *    - the Rust type, which is something out of the MIR;
+     *    - the Cryptol type, which matches the structure of the MIR type;
+     *    - the native SAW and/or Cryptol representation of the value;
+     *
+     * and I think we're playing fast and loose with the distinction
+     * between the last two, which is bad.
+     */
     let to_mir_type t =
       if type_eq t {| [32] |} then
         mir_u32
@@ -239,6 +349,13 @@ soroban_init <- do {
       else
         run (fail (str_concat (show t) " cannot be converted to MIRType"));
 
+    /*
+     * Spec for the storage interface.
+     *
+     * For now at least the Cryptol-level storage interface is written
+     * purely in terms of Values::Raw::T and the type wrapping happens
+     * here. It's possible that should change, but we'll see.
+     */
     let spec_storage = {
 
       state = \storage -> do {
@@ -263,12 +380,18 @@ soroban_init <- do {
 
     };
 
+    /*
+     * Wrapper for contract specs.
+     */
     let soroban_spec spec_name spec = do {
 
       spec {
 
         storage = spec_storage,
 
+        /*
+         * Generate a fresh var of the requested value type.
+         */
         fresh = \name t -> do {
           x <- mir_fresh_cryptol_var (str_concats [spec_name, "::", name]) t;
           let valid = type_valid t;
@@ -290,6 +413,10 @@ soroban_init <- do {
       else
         return [];
 
+    /*
+     * Construct the "overrides" (checked or admitted SAW theorems)
+     * for the SDK interfaces.
+     */
     sdk_overridess <-
 
       let adt_Infallible = mir_find_adt mod "core::convert::Infallible" [] in
@@ -301,7 +428,8 @@ soroban_init <- do {
           (mir_enum_value
             (adt_ResultInfallible (to_mir_type (type x)))
             "Ok"
-            [to_mir_value x]) in
+            [to_mir_value x])
+      in
 
       list.sequence [
 
@@ -370,6 +498,9 @@ soroban_init <- do {
       ];
     let sdk_overrides = list.concats sdk_overridess;
 
+    /*
+     * Hook for running verification
+     */
     let soroban_verify (args : SorobanVerifyArgs) =
       mir_verify mod args.fun (concat sdk_overrides args.overrides)
         args.path_sat args.spec args.proof;

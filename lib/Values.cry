@@ -239,6 +239,10 @@ private
 private
    badval = val_of_body_tag 0 badtag
 
+   val_unit = val_of_body_tag 0 tag_void
+   val_true = val_of_body_tag 0 tag_true
+   val_false = val_of_body_tag 0 tag_false
+
 // val.rs line 249
 submodule Raw where
    type T = Val
@@ -296,71 +300,69 @@ import submodule Raw as Raw
 // void
 
 submodule Void where
-   newtype Void = { raw : Raw::T }
+   newtype Void = { val : Val }
    type T = Void
 
-   raw_void : Raw::T
-   raw_void = Raw::singleton tag_void
+   valid_raw v = val_eq v val_unit
 
-   valid_raw v = val_eq v raw_void
+   unit : T
+   unit = Void { val = val_unit }
 
-   unsafe_from_raw : Raw::T -> Void
-   unsafe_from_raw rv = Void { raw = rv }
-
-   void : Void
-   void = unsafe_from_raw raw_void
-
-   from_raw : Raw::T -> Option::T Void
-   from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
+   from_raw : Val -> Option::T T
+   from_raw b =
+      if valid_raw b then Option::some (Void { val = b })
+      else Option::none' (Void { val = badval })
 
    to_raw : Void -> Raw::T
-   to_raw w = w.raw
+   to_raw x = x.val
 
    valid : Void -> Bit
-   valid w = valid_raw w.raw
+   valid x = valid_raw x.val
 
 import submodule Void as Void
 
-unit = Void::void
+unit = Void::unit
 
 
 ////////////////////////////////////////////////////////////
 // bool
 
 submodule Bool where
-   newtype Bool = { raw : Raw::T }
+   newtype Bool = { val : Val }
    type T = Bool
 
-   raw_true : Raw::T
-   raw_true = Raw::singleton tag_true
+   true : T
+   true = Bool { val = val_true }
 
-   raw_false : Raw::T
-   raw_false = Raw::singleton tag_false
+   false : T
+   false = Bool { val = val_false }
 
    raw_from_bit : Bit -> Raw::T
-   raw_from_bit b = if b then raw_true else raw_false
+   raw_from_bit b = if b then val_true else val_false
 
-   valid_raw v = val_eq v raw_true \/ val_eq v raw_false
+   valid_raw v = val_eq v val_true \/ val_eq v val_false
 
-   unsafe_from_raw : Raw::T -> Bool
-   unsafe_from_raw rv = Bool { raw = rv }
+   from_raw : Val -> Option::T T
+   from_raw b =
+      if valid_raw b then Option::some (Bool { val = b })
+      else Option::none' (Bool { val = badval })
 
-   from_raw : Raw::T -> Option::T Bool
-   from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
-
-   to_raw : Bool -> Raw::T
-   to_raw w = w.raw
+   to_raw : Bool -> Val
+   to_raw b = b.val
 
    valid : Bool -> Bit
-   valid w = valid_raw w.raw
+   valid b = valid_raw b.val
 
    to_bit : Bool -> Bit
-   to_bit v = Raw::shallow_eq (to_raw v) raw_true
+   to_bit b =
+      if val_eq b.val true.val then True else False
 
    from_bit : Bit -> Bool
-   from_bit b = unsafe_from_raw (raw_from_bit b)
+   from_bit b = if b then true else false
 
-import submodule Bool as Bool
+true = Bool::true
+false = Bool::false
+
 
 ////////////////////////////////////////////////////////////
 // u32

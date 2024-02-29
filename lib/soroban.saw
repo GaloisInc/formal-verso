@@ -305,11 +305,11 @@ soroban_init <- do {
         ]
       else if type_eq t {| Values::BoolT |} then
         mir_struct_value (soroban_adt.Bool_ ()) [
-          to_mir_value {{ x.raw }}
+          to_mir_value {{ x.val }}
         ]
       else if type_eq t {| Values::VoidT |} then
         mir_struct_value (soroban_adt.Void ()) [
-          to_mir_value {{ x.raw }}
+          to_mir_value {{ x.val }}
         ]
       else if type_eq t {| Values::SymbolT |} then
         mir_struct_value (soroban_adt.Symbol ()) [

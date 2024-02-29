@@ -60,9 +60,25 @@ submodule Object where
 import submodule Small as Small
 import submodule Object as Object
 
-submodule Wrapper = Wrapper where
-  valid_raw rv = RawVal::has_tag small_tag rv
-              \/ RawVal::has_tag object_tag rv
+submodule Wrapper where
+   valid_raw : RawVal::T -> Bit
+   valid_raw rv = RawVal::has_tag small_tag rv
+               \/ RawVal::has_tag object_tag rv
+
+   type T = Wrapper
+   newtype Wrapper = { raw : RawVal::T }
+
+   to_raw : Wrapper -> RawVal::T
+   to_raw w = w.raw
+
+   from_raw : RawVal::T -> Option::T Wrapper
+   from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
+
+   unsafe_from_raw : RawVal::T -> Wrapper
+   unsafe_from_raw rv = Wrapper { raw = rv }
+
+   valid : Wrapper -> Bit
+   valid w = valid_raw w.raw
 
 import submodule Wrapper as Wrapper
 

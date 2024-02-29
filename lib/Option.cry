@@ -7,8 +7,41 @@ type Option a =
   , value : a
   }
 
+/*
+ * XXX: is this supposed to be "option" or "result"?
+ *
+ * Rust's "option" is None or Some (like ocaml's) and "result" is Ok
+ * or Err, but... we are not in a position to be able to store an
+ * error value given the above definition, so it shouldn't really be
+ * "result".
+ *
+ * I'm going to add "some" and "none" functions as a stopgap for more
+ * clarity until I get a chance to clean it up.
+ *
+ * Also, it appears this type (as opposed to the other option
+ * surrogate in Storage.cry) are never exported into SAW, so there's
+ * no clear reason we can't use Cryptol's own Option. XXX...
+ *
+ * Update: for now at least, add "none'" that takes a dummy value to
+ * store in the value part, since we need to put something there and
+ * we can't actually use zero because there's currently no way to
+ * derive (or explicitly instantiate) the Zero typeclass for the
+ * newtypes we're using.
+ */
+
 ok : {a} a -> Option a
 ok x = mk True x
+
+
+some : {a} a -> Option a
+some x = mk True x
+
+none : {a} Zero a => Option a
+none = mk False zero
+
+none' : {a} a -> Option a
+none' z = mk False z
+
 
 mk : {a} Bit -> a -> Option a
 mk valid value = { is_ok = valid, value = value }

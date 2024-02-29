@@ -605,6 +605,8 @@ bool_from_raw = Bool::from_raw
 u32_from_raw = U32::from_raw
 symbol_from_raw = Symbol::from_raw
 
+void_to_raw = Void::to_raw
+bool_to_raw = Bool::to_raw
 u32_to_raw = U32::to_raw
 symbol_to_raw = Symbol::to_raw
 

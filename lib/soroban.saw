@@ -302,21 +302,54 @@ soroban_init <- do {
      * Convert a value of a value type (recall the value types are
      * Cryptol types and have Cryptol values) to a mir_term.
      *
-     * XXX: should this be converting to "native" (plain cryptol
-     * values that are not Soroban SDK tagged values) which then
-     * presumably get converted back to the Rust tagged implementation
-     * on the MIR side, or should we be passing the representation
-     * across in all cases and not just the raw case?
+     * The MIR term we want is the corresponding tree of constructors
+     * from the Rust side. There are two ways to do this: we can
+     * extract the semantic value from the Cryptol term (e.g. unit,
+     * True, False, 131, "hello", or whatever), convert that to its
+     * Rust/MIR form, then create calls to the corresponding chain of
+     * Rust constructors. Or, we can take advantage of having modeled
+     * the internal representation used on the Rust side to just
+     * extract the internal representation and transfer that across.
+     *
+     * There are at least three reasons to prefer the latter:
+     *    - the internal representation is a u64 and is therefore
+     *      easily moved across;
+     *    - we can construct calls to arbitrary Rust functions if
+     *      needed, but using them in spec-level logic is at least
+     *      problematic (not sure whether it's allowed at all);
+     *    - when we get to supporting object-style values, the
+     *      external pointer part can just be pushed across as part
+     *      of the u64 and we don't need to process the referent.
+     *
+     * In fact, I think this is why the Cryptol-level value logic was
+     * built to match the internals of the Rust value logic.
+     *
+     * Ergo, the way this works is:
+     *    - for types that aren't Values::Raw::T, recurse on the raw
+     *      value and pass the results to the corresponding Rust
+     *      constructor;
+     *    - for Values::Raw::T, extract the bits of the representation
+     *      and pass that to the Rust constructor.
+     *
+     * Note that for the latter case we need to fetch the bits
+     * directly rather than calling the Cryptol-level accessor
+     * function. Otherwise SAW loses track of the value when doing
+     * override matching and the specs we produce don't work. See
+     * saw-script #2035.
+     *
+     * For reasons I don't understand this seems to apply only to
+     * the raw layer; the accessor functions for the wrapper types
+     * seem to work ok.
      */
     rec to_mir_value x =
       let t = type x in
       if type_eq t {| Values::VoidT |} then
         mir_struct_value (soroban_adt.Void ()) [
-          to_mir_value {{ x.val }}
+          to_mir_value {{ Values::void_to_raw x }}
         ]
       else if type_eq t {| Values::BoolT |} then
         mir_struct_value (soroban_adt.Bool_ ()) [
-          to_mir_value {{ x.val }}
+          to_mir_value {{ Values::bool_to_raw x }}
         ]
       else if type_eq t {| Values::U32T |} then
         mir_term x
@@ -324,7 +357,7 @@ soroban_init <- do {
         mir_struct_value (soroban_adt.Symbol ()) [
           mir_value.MaybeEnv (),
           mir_struct_value (soroban_adt.SymbolVal ()) [
-            to_mir_value {{ x.raw }}
+            to_mir_value {{ Values::symbol_to_raw x }}
           ]
         ]
       else if type_eq t {| Values::RawT |} then

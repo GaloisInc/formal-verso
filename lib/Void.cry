@@ -1,14 +1,30 @@
 module Void where
 
-import Void::Raw as Void::Raw
-import Void::Val as Void::Val
+import Option as Option
+import RawVal as RawVal
+import Tag as Tag
+import Body as Body
 
+newtype Void = { raw : RawVal::T }
 type T = Void
 
-type Void = Void::Val::T
+raw_void : RawVal::T
+raw_void = RawVal::singleton Tag::void
 
-void : Void::Val::T
-void = Void::Val::unsafe_from_raw Void::Raw::void
+valid_raw rv = RawVal::shallow_eq rv raw_void
 
-from_raw = Void::Val::from_raw
-valid = Void::Val::valid
+unsafe_from_raw : RawVal::T -> Void
+unsafe_from_raw rv = Void { raw = rv }
+
+void : Void
+void = unsafe_from_raw raw_void
+
+from_raw : RawVal::T -> Option::T Void
+from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
+
+to_raw : Void -> RawVal::T
+to_raw w = w.raw
+
+valid : Void -> Bit
+valid w = valid_raw w.raw
+

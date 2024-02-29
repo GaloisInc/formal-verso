@@ -1,7 +1,0 @@
-module Void::Raw where
-
-import RawVal as RawVal
-import Tag as Tag
-
-void : RawVal::T
-void = RawVal::singleton Tag::void

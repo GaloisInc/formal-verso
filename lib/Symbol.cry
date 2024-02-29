@@ -12,46 +12,14 @@ object_tag : Tag::T
 object_tag = Tag::symbol_object
 
 submodule General where
-
-   submodule Small where
-      type T = Small
-      newtype Small = { raw : RawVal::T }
-
-   // end of Small
-
-   submodule Object where
-      type T = Object
-      newtype Object = { raw : RawVal::T }
-   // end of Object
-
    submodule Wrapper where
       type T = Wrapper
       newtype Wrapper = { raw : RawVal::T }
 
-import submodule General::Small as General::Small
-import submodule General::Object as General::Object
 import submodule General::Wrapper as Wrapper
 
-type SmallT = General::Small::T
-type ObjectT = General::Object::T
-
-small_unsafe_from_raw : RawVal::T -> SmallT
-small_unsafe_from_raw rv = General::Small::Small { raw = rv }
-
-small_from_body : Body::T -> SmallT
-small_from_body body = small_unsafe_from_raw (RawVal::from_body_and_tag body small_tag)
-
-small_from_string : {n} (n <= 9) => String n -> SmallT
-small_from_string s = small_from_body (zext (join (map encode_char s)))
-
-small_to_raw : SmallT -> RawVal::T
-small_to_raw w = w.raw
-
-general_unsafe_from_raw : RawVal::T -> Symbol
-general_unsafe_from_raw rv = Wrapper::Wrapper { raw = rv }
-
-general_from_small : SmallT -> Wrapper::T
-general_from_small s = general_unsafe_from_raw (small_to_raw s)
+unsafe_from_raw : RawVal::T -> Symbol
+unsafe_from_raw rv = Wrapper::Wrapper { raw = rv }
 
 encode_char : Char -> [6]
 encode_char ch =
@@ -64,18 +32,18 @@ encode_char ch =
       # ", supported range [a-zA-Z0-9_]")
 
 type T = Symbol
-
 type Symbol = Wrapper::T
 
 short : {n} (n <= 9) => String n -> Symbol
-short s = general_from_small (small_from_string s)
+short s = unsafe_from_raw (RawVal::from_body_and_tag body small_tag)
+   where body = zext (join (map encode_char s))
 
-general_valid_raw : RawVal::T -> Bit
-general_valid_raw rv = RawVal::has_tag small_tag rv
-                    \/ RawVal::has_tag object_tag rv
+valid_raw : RawVal::T -> Bit
+valid_raw rv = RawVal::has_tag small_tag rv
+            \/ RawVal::has_tag object_tag rv
 
 from_raw : RawVal::T -> Option::T Symbol
-from_raw rv = Option::mk (general_valid_raw rv) (general_unsafe_from_raw rv)
+from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
 
 valid : Symbol -> Bit
-valid w = general_valid_raw w.raw
+valid w = valid_raw w.raw

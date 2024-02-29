@@ -3,11 +3,13 @@ enable_experimental;
 include "list.saw";
 
 typedef SorobanCry = {
-  Bool_ : CryptolModule,
-  RawVal : CryptolModule,
-  Storage : CryptolModule,
-  Symbol : CryptolModule,
-  Void : CryptolModule
+  Values : CryptolModule,
+  //Void : CryptolModule,
+  //Bool_ : CryptolModule,
+  //Symbol : CryptolModule,
+  //RawVal : CryptolModule,
+
+  Storage : CryptolModule
 };
 
 typedef SorobanAdt = {
@@ -66,14 +68,23 @@ typedef SorobanAPI = {
 
 soroban_init <- do {
 
-  Bool_ <- cryptol_load "Bool.cry";
-  Option <- cryptol_load "Option.cry";
-  RawVal <- cryptol_load "RawVal.cry";
-  Storage <- cryptol_load "Storage.cry";
-  Symbol <- cryptol_load "Symbol.cry";
-  U32 <- cryptol_load "U32.cry";
   Util <- cryptol_load "Util.cry";
-  Void <- cryptol_load "Void.cry";
+  Option <- cryptol_load "Option.cry";
+
+  //Void <- cryptol_load "Void.cry";
+  //Bool_ <- cryptol_load "Bool.cry";
+  //U32 <- cryptol_load "U32.cry";
+  //Symbol <- cryptol_load "Symbol.cry";
+  //RawVal <- cryptol_load "RawVal.cry";
+  Values <- cryptol_load "Values.cry";
+  // can't do this, alas
+  //Void <- cryptol_extract_submodule Values "Void";
+  //let Bool_ = cryptol_extract_submodule Values "Bool";
+  //let U32 = cryptol_extract_submodule Values "U32";
+  //let Symbol = cryptol_extract_submodule Values "Symbol";
+  //RawVal <- cryptol_extract_submodule Values "Raw";
+
+  Storage <- cryptol_load "Storage.cry";
 
   let soroban_init (mod : MIRModule) (features : [String])
   : TopLevel SorobanAPI = do {
@@ -86,11 +97,13 @@ soroban_init <- do {
     };
 
     let soroban_cry : SorobanCry = {
-      Bool_ = Bool_,
-      RawVal = RawVal,
-      Storage = Storage,
-      Symbol = Symbol,
-      Void = Void
+      Values = Values,
+      //Void = Void,
+      //Bool_ = Bool_,
+      //Symbol = Symbol,
+      //RawVal = RawVal,
+
+      Storage = Storage
     };
 
     let feat_implies feats (x, y) =
@@ -160,28 +173,28 @@ soroban_init <- do {
 
     let to_raw (t : Type) : Term /* t -> RawVal */ =
       if type_eq t {| [32] |} then
-        {{ U32::to_raw }}
+        {{ Values::u32_to_raw }}
       else
         {{ \(s : t) -> s.raw }};
 
     let from_raw (t : Type) : Term /* RawVal -> Option t */ =
       if type_eq t {| [32] |} then
-        {{ U32::from_raw }}
+        {{ Values::u32_from_raw }}
       else if type_eq t {| Bool_::T |} then
-        {{ Bool_::from_raw }}
+        {{ Values::bool_from_raw }}
       else if type_eq t {| Void::T |} then
-        {{ Void::from_raw }}
+        {{ Values::void_from_raw }}
       else if type_eq t {| Symbol::T |} then
-        {{ Symbol::from_raw }}
+        {{ Values::symbol_from_raw }}
       else
         run (fail (str_concat (show t) " cannot be converted from RawVal"));
 
     let type_valid (t : Type) : Term /* t -> Bit */ =
-      if type_eq t {| Bool_::T |} then
+      if type_eq t {| Values::BoolT |} then
         {{ Bool_::valid }}
-      else if type_eq t {| Void::T |} then
+      else if type_eq t {| Values::VoidT |} then
         {{ Void::valid }}
-      else if type_eq t {| Symbol::T |} then
+      else if type_eq t {| Values::SymbolT |} then
         {{ Symbol::valid }}
       else
         // default to no conditions
@@ -189,19 +202,19 @@ soroban_init <- do {
 
     rec to_mir_value x =
       let t = type x in
-      if type_eq t {| RawVal::T |} then
+      if type_eq t {| Values::RawT |} then
         mir_struct_value (soroban_adt.RawVal ()) [
           mir_term {{ x.payload }}
         ]
-      else if type_eq t {| Bool_::T |} then
+      else if type_eq t {| Values::BoolT |} then
         mir_struct_value (soroban_adt.Bool_ ()) [
           to_mir_value {{ x.raw }}
         ]
-      else if type_eq t {| Void::T |} then
+      else if type_eq t {| Values::VoidT |} then
         mir_struct_value (soroban_adt.Void ()) [
           to_mir_value {{ x.raw }}
         ]
-      else if type_eq t {| Symbol::T |} then
+      else if type_eq t {| Values::SymbolT |} then
         mir_struct_value (soroban_adt.Symbol ()) [
           mir_value.MaybeEnv (),
           mir_struct_value (soroban_adt.SymbolVal ()) [
@@ -215,13 +228,13 @@ soroban_init <- do {
     let to_mir_type t =
       if type_eq t {| [32] |} then
         mir_u32
-      else if type_eq t {| RawVal::T |} then
+      else if type_eq t {| Values::RawT |} then
         mir_adt (soroban_adt.RawVal ())
-      else if type_eq t {| Bool_::T |} then
+      else if type_eq t {| Values::BoolT |} then
         mir_adt (soroban_adt.Bool_ ())
-      else if type_eq t {| Void::T |} then
+      else if type_eq t {| Values::VoidT |} then
         mir_adt (soroban_adt.Void ())
-      else if type_eq t {| Symbol::T |} then
+      else if type_eq t {| Values::SymbolT |} then
         mir_adt (soroban_adt.Symbol ())
       else
         run (fail (str_concat (show t) " cannot be converted to MIRType"));
@@ -300,7 +313,7 @@ soroban_init <- do {
             self <- mir_alloc (mir_adt (soroban_adt.Env ()));
             mir_points_to self (s.mir_value.Env ());
 
-            k <- s.fresh "k" {| RawVal::T |};
+            k <- s.fresh "k" {| Values::RawT |};
 
             s.storage.state storage;
 
@@ -308,7 +321,7 @@ soroban_init <- do {
 
             s.storage.state storage;
 
-            return_ok {{ Bool_::from_bit (Storage::has storage k) }};
+            return_ok {{ Values::bool_from_native (Storage::has storage k) }};
 
           }),
 
@@ -320,7 +333,7 @@ soroban_init <- do {
             self <- mir_alloc (mir_adt (soroban_adt.Env ()));
             mir_points_to self (s.mir_value.Env ());
 
-            k <- s.fresh "k" {| RawVal::T |};
+            k <- s.fresh "k" {| Values::RawT |};
 
             mir_precond {{ Storage::has storage k }};
             s.storage.state storage;
@@ -341,8 +354,8 @@ soroban_init <- do {
             self <- mir_alloc (mir_adt (soroban_adt.Env ()));
             mir_points_to self (s.mir_value.Env ());
 
-            k <- s.fresh "k" {| RawVal::T |};
-            v <- s.fresh "v" {| RawVal::T |};
+            k <- s.fresh "k" {| Values::RawT |};
+            v <- s.fresh "v" {| Values::RawT |};
 
             s.storage.state storage;
 
@@ -350,7 +363,7 @@ soroban_init <- do {
 
             s.storage.state {{ Storage::set storage k v }};
 
-            return_ok {{ Void::void }};
+            return_ok {{ Values::unit }};
 
           })
 

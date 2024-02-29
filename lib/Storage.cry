@@ -2,7 +2,8 @@ module Storage where
 
 import Array
 import Option as Option
-import RawVal as RawVal
+import Values as Values
+import submodule Values::RawVal as RawVal
 
 type T = Storage
 

@@ -10,11 +10,11 @@ mod <- mir_load_module "../soroban-examples/increment/target/linked-mir.json";
 soroban <- soroban_init mod ["storage", "symbol"];
 
 // Bind Cryptol modules so that they are accessible in {{ ... }}
+let Values = soroban.cry.Values;
 let Storage = soroban.cry.Storage;
-let Symbol = soroban.cry.Symbol;
 
 // Compute Symbol value for COUNTER
-let COUNTER = {{ Symbol::short "COUNTER" }};
+let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
 
 // Declare specification for increment function
 let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {

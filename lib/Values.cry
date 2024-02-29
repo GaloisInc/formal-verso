@@ -176,62 +176,115 @@ private
 ////////////////////////////////////////////////////////////
 // values
 
-submodule Body where
-   type T = Body
+// XXX can't make it private; using an accessor function in
+// to_mir_value in soroban.saw breaks SAW.
+//private
+newtype Val = { bits: [WORD_BITS] }
 
-   type Body = [56]
-   type Major = [32]
-   type Minor = [24]
+//
+// You can't (yet) derive typeclass instances for newtypes, so until
+// then we need this (and to use it explicitly where it would be nicer
+// to write "==")
+private
+   val_eq : Val -> Val -> Bool
+   val_eq v1 v2 = v1.bits == v2.bits
 
-   from_major_minor : Major -> Minor -> Body
-   from_major_minor = (#)
+/*
+ * I am not transcribing the assorted Rust type widgetry since
+ * it mostly doesn't make sense in Cryptol.
+ */
 
-   get_major : Body -> Major
-   get_major = take
+/*
+ * Field extraction functions
+ * (these don't neatly correspond to anything in the rust code)
+ */
 
-   get_minor : Body -> Minor
-   get_minor = drop
+private
+   body_of_val : Val -> [BODY_BITS]
+   body_of_val v = drop ((v.bits >> BODY_SHIFT) && BODY_MASK)
 
-import submodule Body as Body
+   tag_of_val : Val -> Tag
+   tag_of_val v = drop ((v.bits >> TAG_SHIFT) && TAG_MASK)
 
+   major_of_val : Val -> [MAJOR_BITS]
+   major_of_val v = drop ((v.bits >> MAJOR_SHIFT) && MAJOR_MASK)
+
+   minor_of_val : Val -> [MINOR_BITS]
+   minor_of_val v = drop ((v.bits >> MINOR_SHIFT) && MINOR_MASK)
+
+/*
+ * Construction functions
+ * (likewise)
+ */
+private
+   val_of_body_tag : [56] -> Tag -> Val
+   val_of_body_tag body tag =
+      Val { bits = (body' || tag') }
+      where
+         body' = zext`{64} body << BODY_SHIFT
+         tag' = zext`{64} tag << TAG_SHIFT
+
+   val_of_major_minor_tag : [32] -> [24] -> Tag -> Val
+   val_of_major_minor_tag major minor tag =
+      Val { bits = (major' || minor' || tag') }
+      where
+         major' = zext`{64} major << MAJOR_SHIFT
+         minor' = zext`{64} minor << MINOR_SHIFT
+         tag' = zext`{64} tag << TAG_SHIFT
+
+/*
+ * Constructors and constants
+ */
+
+private
+   badval = val_of_body_tag 0 badtag
+
+// val.rs line 249
 submodule RawVal where
+   type T = Val
 
-   type Payload = [64]
+   // val.rs lines 685-688
+   get_payload : T -> [64]
+   get_payload x = x.bits
 
-   type T = RawVal
+   // val.rs lines 690-693
+   from_payload : [64] -> T
+   from_payload x = Val { bits = x }
 
-   newtype RawVal = { payload : Payload }
+   // val.rs lines 685-688
+   shallow_eq : T -> T -> Bool
+   shallow_eq x y = x.bits == y.bits
 
-   shallow_eq : RawVal -> RawVal -> Bit
-   shallow_eq x y = x.payload == y.payload
-
-   has_tag : Tag -> RawVal -> Bit
+   // val.rs lines 726-729
+   has_tag : Tag -> T -> Bool
    has_tag t rv = get_tag rv == t
 
-   from_symbol_small : Body::T -> RawVal
-   from_symbol_small body = from_body_and_tag body tag_symbolsmall
+   //from_symbol_small : Body::T -> RawVal
+   //from_symbol_small body = from_body_and_tag body tag_symbolsmall
 
-   from_body_and_tag : Body::T -> Tag -> RawVal
-   from_body_and_tag body tag = RawVal { payload = body # tag }
+   // val.rs lines 731-736
+   from_body_and_tag : [BODY_BITS] -> Tag -> T
+   from_body_and_tag body tag = val_of_body_tag body tag
 
-   from_major_minor_and_tag : Body::Major -> Body::Minor -> Tag -> RawVal
-   from_major_minor_and_tag major minor =
-     from_body_and_tag (Body::from_major_minor major minor)
+   // val.rs lines 738-744
+   from_major_minor_and_tag : [MAJOR_BITS] -> [MINOR_BITS] -> Tag -> T
+   from_major_minor_and_tag major minor tag =
+      val_of_major_minor_tag major minor tag
 
-   singleton : Tag -> RawVal
+   singleton : Tag -> T
    singleton = from_body_and_tag 0
 
-   get_tag : RawVal -> Tag
-   get_tag rv = drop rv.payload
+   get_tag : T -> Tag
+   get_tag v = tag_of_val v
 
-   get_body : RawVal -> Body::T
-   get_body rv = take rv.payload
+   get_body : T -> [BODY_BITS]
+   get_body v = body_of_val v
 
-   get_major : RawVal -> Body::Major
-   get_major rv = Body::get_major (get_body rv)
+   get_major : T -> [MAJOR_BITS]
+   get_major v = major_of_val v
 
-   get_minor : RawVal -> Body::Minor
-   get_minor rv = Body::get_minor (get_body rv)
+   get_minor : T -> [MINOR_BITS]
+   get_minor v = minor_of_val v
 
 import submodule RawVal as RawVal
 
@@ -393,3 +446,6 @@ u32_from_raw = U32::from_raw
 symbol_from_raw = Symbol::from_raw
 
 u32_to_raw = U32::to_raw
+
+raw_from_payload = RawVal::from_payload
+raw_get_payload = RawVal::get_payload

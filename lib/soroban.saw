@@ -299,7 +299,9 @@ soroban_init <- do {
       let t = type x in
       if type_eq t {| Values::RawT |} then
         mir_struct_value (soroban_adt.RawVal ()) [
-          mir_term {{ x.payload }}
+          // XXX: can't do this, it makes SAW unable to match specs
+          //mir_term {{ Values::raw_get_payload x }}
+          mir_term {{ x.bits }}
         ]
       else if type_eq t {| Values::BoolT |} then
         mir_struct_value (soroban_adt.Bool_ ()) [

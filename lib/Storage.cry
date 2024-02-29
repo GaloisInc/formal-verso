@@ -17,8 +17,9 @@ has : Storage -> RawVal::T -> Bit
 has s k = Option::is_ok (get s k)
 
 get : Storage -> RawVal::T -> Option::T RawVal::T
-get s k = Option::mk (head orv) (RawVal::RawVal { payload = tail orv })
+get s k = Option::mk (head orv) (RawVal::from_payload (tail orv))
   where orv = arrayLookup s.array k
 
 set : Storage -> RawVal::T -> RawVal::T -> Storage
-set s k v = Storage { array = arrayUpdate s.array k (0b1 # v.payload) }
+set s k v = Storage { array = arrayUpdate s.array k (0b1 # payload) }
+  where payload = RawVal::get_payload v

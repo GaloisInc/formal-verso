@@ -5,21 +5,18 @@ import RawVal as RawVal
 import Tag as Tag
 import Body as Body
 
-small_tag : Tag::T
-small_tag = Tag::symbol_small
+newtype Symbol = { raw : RawVal::T }
+type T = Symbol
 
-object_tag : Tag::T
-object_tag = Tag::symbol_object
-
-submodule General where
-   submodule Wrapper where
-      type T = Wrapper
-      newtype Wrapper = { raw : RawVal::T }
-
-import submodule General::Wrapper as Wrapper
+valid_raw : RawVal::T -> Bit
+valid_raw rv = RawVal::has_tag Tag::symbol_small rv
+            \/ RawVal::has_tag Tag::symbol_object rv
 
 unsafe_from_raw : RawVal::T -> Symbol
-unsafe_from_raw rv = Wrapper::Wrapper { raw = rv }
+unsafe_from_raw rv = Symbol { raw = rv }
+
+from_raw : RawVal::T -> Option::T Symbol
+from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
 
 encode_char : Char -> [6]
 encode_char ch =
@@ -31,19 +28,9 @@ encode_char ch =
     ("symbol bad char: encountered " # [ch]
       # ", supported range [a-zA-Z0-9_]")
 
-type T = Symbol
-type Symbol = Wrapper::T
-
-short : {n} (n <= 9) => String n -> Symbol
-short s = unsafe_from_raw (RawVal::from_body_and_tag body small_tag)
-   where body = zext (join (map encode_char s))
-
-valid_raw : RawVal::T -> Bit
-valid_raw rv = RawVal::has_tag small_tag rv
-            \/ RawVal::has_tag object_tag rv
-
-from_raw : RawVal::T -> Option::T Symbol
-from_raw rv = Option::mk (valid_raw rv) (unsafe_from_raw rv)
-
 valid : Symbol -> Bit
 valid w = valid_raw w.raw
+
+short : {n} (n <= 9) => String n -> Symbol
+short s = unsafe_from_raw (RawVal::from_body_and_tag body Tag::symbol_small)
+   where body = zext (join (map encode_char s))

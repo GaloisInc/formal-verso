@@ -3,11 +3,10 @@ module Symbol::Small where
 import Symbol::General as General
 
 import submodule General::Small as Small
-import submodule Small::Wrapper as Wrapper
 
 type T = Small
 
-type Small = Wrapper::T
+type Small = Small::T
 
 from_string : {n} (n <= 9) => String n -> Small
 from_string s = Small::from_body (zext (join (map encode_char s)))

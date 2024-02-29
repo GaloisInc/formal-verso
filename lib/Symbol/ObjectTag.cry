@@ -1,5 +1,0 @@
-module Symbol::ObjectTag where
-
-import Tag as Tag
-
-tag = Tag::symbol_object

@@ -1,5 +1,0 @@
-module Symbol::SmallTag where
-
-import Tag as Tag
-
-tag = Tag::symbol_small

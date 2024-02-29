@@ -333,6 +333,26 @@ submodule Raw where
     * Inspection functions
     */
 
+   // val.rs lines 645-683
+   val_is_good : T -> Bool
+   val_is_good v =
+      if val_eq v val_false \/
+         val_eq v val_true \/
+         val_eq v val_unit then True
+       | tag == tag_u32val then minor_of_val v == 0
+       | tag == tag_i32val then minor_of_val v == 0
+       | tag == tag_symbolsmall then smallsym_body_valid (body_of_val v)
+       | tag == tag_symbolobject \/
+         tag == tag_mapobject then
+            /* XXX notyet */
+            error "Cannot interpret symbol/map objects yet"
+       else False
+      where tag = tag_of_val v
+
+   /*
+    * External functions matching those from val.rs
+    */
+
    // val.rs lines 685-688
    get_payload : T -> [64]
    get_payload x = x.bits
@@ -345,12 +365,21 @@ submodule Raw where
    shallow_eq : T -> T -> Bool
    shallow_eq x y = x.bits == y.bits
 
+   // val.rs lines 700-709
+   get_tag : T -> Tag
+   get_tag v = tag_of_val v
+
    // val.rs lines 726-729
    has_tag : Tag -> T -> Bool
    has_tag t rv = get_tag rv == t
 
-   //from_symbol_small : Body::T -> RawVal
-   //from_symbol_small body = from_body_and_tag body tag_symbolsmall
+   // val.rs lines 711-714
+   get_body : T -> [BODY_BITS]
+   get_body v = body_of_val v
+
+   // val.rs lines 716-719
+   has_body : T -> [BODY_BITS] -> Bool
+   has_body v w = body_of_val v == w
 
    // val.rs lines 731-736
    from_body_and_tag : [BODY_BITS] -> Tag -> T
@@ -361,22 +390,38 @@ submodule Raw where
    from_major_minor_and_tag major minor tag =
       val_of_major_minor_tag major minor tag
 
-   singleton : Tag -> T
-   singleton = from_body_and_tag 0
+   // val.rs lines 746-749
+   has_minor : T -> [MINOR_BITS] -> Bool
+   has_minor v minor = minor_of_val v == minor
 
-   get_tag : T -> Tag
-   get_tag v = tag_of_val v
+   // val.rs lines 751-754
+   has_major : T -> [MAJOR_BITS] -> Bool
+   has_major v major = major_of_val v == major
 
-   get_body : T -> [BODY_BITS]
-   get_body v = body_of_val v
-
-   get_major : T -> [MAJOR_BITS]
-   get_major v = major_of_val v
-
+   // val.rs lines 756-759
    get_minor : T -> [MINOR_BITS]
    get_minor v = minor_of_val v
 
-import submodule Raw as Raw
+   // val.rs lines 761-764
+   get_major : T -> [MAJOR_BITS]
+   get_major v = major_of_val v
+
+   // val.rs lines 766-774
+   is_object : T -> Bool
+   is_object v = tag_is_object (tag_of_val v)
+
+   // val.rs lines 782-785
+   is_void : T -> Bool
+   is_void v = val_eq v val_unit
+
+   // val.rs lines 787-790
+   is_true : T -> Bool
+   is_true v = val_eq v val_true
+
+   // val.rs lines 792-795
+   is_false : T -> Bool
+   is_false v = val_eq v val_false
+
 
 ////////////////////////////////////////////////////////////
 // void

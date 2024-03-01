@@ -552,6 +552,49 @@ u32_zero = U32::ZERO
 
 
 ////////////////////////////////////////////////////////////
+// i32
+// val.rs lines 505-514, 799-801
+// num.rs lines 13, 21-24, 67-77
+
+submodule I32 where
+   newtype T = { val : Val }
+
+   valid' : Val -> Bool
+   valid' v = tag_of_val v == tag_i32val /\ minor_of_val v == 0
+
+   valid : T -> Bool
+   valid k = valid' k.val
+
+   to_raw : T -> Val
+   to_raw k = k.val
+
+   from_raw : Val -> Option::T T
+   from_raw v =
+      if valid' v then Option::some (T { val = v })
+      else Option::none' (T { val = badval })
+
+   to_native : T -> [32]
+   to_native k = decode_i32 k.val
+
+   from_native : [32] -> T
+   from_native k = T { val = encode_i32 k }
+
+   ZERO : T
+   ZERO = from_native 0
+
+   ONE : T
+   ONE = from_native 1
+
+   MIN : T
+   MIN = from_native 0x80000000
+
+   MAX : T
+   MAX = from_native 0x7fffffff
+
+i32_zero = I32::ZERO
+
+
+////////////////////////////////////////////////////////////
 // symbol
 // symbol.rs (more or less all of it)
 

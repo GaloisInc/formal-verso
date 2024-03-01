@@ -11,6 +11,7 @@ build:
 
 saw-build:
 	cargo saw-build --target wasm32-unknown-unknown --release
+	cp target/*/release/deps/*.linked-mir.json target/linked-mir.json
 
 fmt:
 	cargo fmt --all

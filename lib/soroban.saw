@@ -318,6 +318,8 @@ soroban_init <- do {
         mir_struct_value (soroban_adt.Bool_ ()) [
           to_mir_value {{ x.val }}
         ]
+      else if type_eq t {| Values::U32T |} then
+        mir_term x
       else if type_eq t {| Values::SymbolT |} then
         mir_struct_value (soroban_adt.Symbol ()) [
           mir_value.MaybeEnv (),
@@ -325,8 +327,6 @@ soroban_init <- do {
             to_mir_value {{ x.raw }}
           ]
         ]
-      else if type_eq t {| Values::U32T |} then
-        mir_term x
       else if type_eq t {| Values::RawT |} then
         mir_struct_value (soroban_adt.RawVal ()) [
           // XXX: can't do this, it makes SAW unable to match specs

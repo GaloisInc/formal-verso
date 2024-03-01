@@ -583,32 +583,44 @@ submodule Symbol where
 ////////////////////////////////////////////////////////////
 // workarounds for saw-script #1964
 // (cannot refer to cryptol submodule elements directly)
+
 type VoidT = Void::T
 type BoolT = Bool::T
 type U32T = /*U32::T*/ [32]
 type SymbolT = Symbol::T
 type RawT = Raw::T
 
+void_valid = Void::valid
+void_from_raw = Void::from_raw
+void_to_raw = Void::to_raw
+void_from_native = Void::from_native
+void_to_native = Void::to_native
+
+bool_valid = Bool::valid
+bool_from_raw = Bool::from_raw
+bool_to_raw = Bool::to_raw
+bool_from_native = Bool::from_native
+bool_to_native = Bool::to_native
+
+u32_valid : U32T -> Bool
+u32_valid _ = True
+u32_from_raw = U32::from_raw
+u32_to_raw = U32::to_raw
+u32_from_native : [32] -> U32T
+u32_from_native k = k
+u32_to_native : U32T -> [32]
+u32_to_native k = k
+
+symbol_valid = Symbol::valid
+symbol_from_raw = Symbol::from_raw
+symbol_to_raw = Symbol::to_raw
+symbol_from_native = Symbol::from_native
+//symbol_to_native = Symbol::to_native
+
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good
 raw_valid : Raw::T -> Bool
 raw_valid _ = True
-
-bool_from_native = Bool::from_native
-symbol_from_native = Symbol::from_native
-
-void_to_native = Void::to_native
-bool_to_native = Bool::to_native
-
-void_from_raw = Void::from_raw
-bool_from_raw = Bool::from_raw
-u32_from_raw = U32::from_raw
-symbol_from_raw = Symbol::from_raw
-
-void_to_raw = Void::to_raw
-bool_to_raw = Bool::to_raw
-u32_to_raw = U32::to_raw
-symbol_to_raw = Symbol::to_raw
 
 raw_from_payload = Raw::from_payload
 raw_get_payload = Raw::get_payload

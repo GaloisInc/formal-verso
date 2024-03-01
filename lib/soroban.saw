@@ -280,7 +280,7 @@ soroban_init <- do {
      *
      * valid : (t : Type) -> t -> Bit
      */
-    let type_valid (t : Type) : Term /* t -> Bit */ =
+    let valid (t : Type) : Term =
       if type_eq t {| Values::VoidT |} then
         {{ Values::void_valid }}
       else if type_eq t {| Values::BoolT |} then
@@ -443,8 +443,8 @@ soroban_init <- do {
          */
         fresh = \name t -> do {
           x <- mir_fresh_cryptol_var (str_concats [spec_name, "::", name]) t;
-          let valid = type_valid t;
-          mir_assert {{ valid x }};
+          let t_valid = valid t;
+          mir_assert {{ t_valid x }};
           return x;
         },
 

@@ -434,7 +434,7 @@ soroban_init <- do {
      */
     let soroban_spec spec_name spec = do {
 
-      spec {
+      let (api : SorobanSpecAPI) = {
 
         storage = spec_storage,
 
@@ -453,6 +453,8 @@ soroban_init <- do {
         to_mir_type = to_mir_type
 
       };
+
+      spec api;
 
     };
 

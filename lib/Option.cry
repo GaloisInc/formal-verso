@@ -61,7 +61,7 @@ ok_implies p o = if o.is_ok then p o.value else True
 ok_and : {a} (a -> Bit) -> Option a -> Bit
 ok_and p o = if o.is_ok then p o.value else False
 
-fmap : {a, b} (Zero b) => Option a -> (a -> b) -> Option b
+fmap : {a, b} Option a -> (a -> b) -> Option b
 fmap o f =
   { is_ok = o.is_ok
   , value = f o.value

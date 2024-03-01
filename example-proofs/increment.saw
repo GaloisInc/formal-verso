@@ -7,7 +7,7 @@ include "../lib/soroban.saw";
 mod <- mir_load_module "../soroban-examples/increment/target/linked-mir.json";
 
 // Initialize soroban verification with storage and symbol APIs
-soroban <- soroban_init mod ["storage", "symbol"];
+soroban <- soroban_init mod ["storage", "symbol", "u32_val"];
 
 // Bind Cryptol modules so that they are accessible in {{ ... }}
 let Values = soroban.cry.Values;
@@ -22,13 +22,15 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
   // Declare a fresh symbolic Storage
   storage <- s.fresh "storage" {| Storage::T |};
 
-  // Get value in storage at COUNTER as a [32]
-  let counter_val = s.storage.get storage COUNTER {| [32] |};
-  // Assume that the conversion to [32] is successful, or that there was no
+  // Get value in storage at COUNTER as a Values::U32::T
+  let counter_val = s.storage.get storage COUNTER {| Values::U32T |};
+  // Assume that the conversion is successful, or that there was no
   // value set
-  count <- option.unwrap {{ Option::unwrap_or counter_val (Option::ok 0) }};
+  count <- option.unwrap {{ Option::unwrap_or counter_val (Option::ok Values::u32_zero) }};
+  // get the [u32] inside the soroban value
+  let ncount = {{ Values::u32_to_native count }};
   // Assume count < 1000 so that we don't get overflow
-  mir_precond {{ count < 1000 }};
+  mir_precond {{ ncount < 1000 }};
 
   // Set storage as the initial storage state
   s.storage.state storage;
@@ -37,14 +39,15 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
   mir_execute_func [s.mir_value.Env ()];
 
   // Compute updated count
-  let count' = {{ count + 1 }};
+  let ncount' = {{ ncount + 1 }};
+  let count' = {{ Values::u32_from_native ncount' }};
 
   // Check that final storage state is initial storage updated to count' at
   // COUNTER
   s.storage.state (s.storage.set storage COUNTER count');
 
   // Check that count' is returned
-  mir_return (s.to_mir_value count');
+  mir_return (mir_term ncount');
 
 });
 

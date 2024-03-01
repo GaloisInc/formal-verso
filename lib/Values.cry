@@ -313,6 +313,16 @@ private
    val_true = val_of_body_tag 0 tag_true
    val_false = val_of_body_tag 0 tag_false
 
+   encode_32 : [32] -> Val
+   encode_32 x = val_of_major_minor_tag x 0 tag_u32val
+   encode_u32 x = encode_32 x
+   encode_i32 x = encode_32 x
+
+   decode_32 : Val -> [32]
+   decode_32 v = major_of_val v
+   decode_u32 x = decode_32 x
+   decode_i32 x = decode_32 x
+
    encode_symbolsmall s =
       val_of_body_tag (smallsym_body_of_string s) tag_symbolsmall
    decode_symbolsmall v =
@@ -496,18 +506,46 @@ false = Bool::false
 
 ////////////////////////////////////////////////////////////
 // u32
+// val.rs lines 494-503, 803-806
+// num.rs lines 12, 16-19, 55-65
 
 submodule U32 where
+   newtype T = { val : Val }
+
    valid' : Val -> Bool
    valid' v = tag_of_val v == tag_u32val /\ minor_of_val v == 0
 
-   to_raw : [32] -> Raw::T
-   to_raw u = Raw::from_major_minor_and_tag u 0 tag_u32val
+   valid : T -> Bool
+   valid k = valid' k.val
 
-   from_raw : Raw::T -> Option::T [32]
-   from_raw rv = Option::mk (valid' rv) (major_of_val rv)
+   to_raw : T -> Val
+   to_raw k = k.val
 
-import submodule U32 as U32
+   from_raw : Val -> Option::T T
+   from_raw v =
+      if valid' v then Option::some (T { val = v })
+      else Option::none' (T { val = badval })
+
+   to_native : T -> [32]
+   to_native k = decode_u32 k.val
+
+   from_native : [32] -> T
+   from_native k = T { val = encode_u32 k }
+
+   ZERO : T
+   ZERO = from_native 0
+
+   ONE : T
+   ONE = from_native 1
+
+   MIN : T
+   MIN = from_native 0
+
+   MAX : T
+   MAX = from_native (~0)
+
+u32_zero = U32::ZERO
+
 
 ////////////////////////////////////////////////////////////
 // symbol
@@ -586,7 +624,7 @@ submodule Symbol where
 
 type VoidT = Void::T
 type BoolT = Bool::T
-type U32T = /*U32::T*/ [32]
+type U32T = U32::T
 type SymbolT = Symbol::T
 type RawT = Raw::T
 
@@ -602,14 +640,11 @@ bool_to_raw = Bool::to_raw
 bool_from_native = Bool::from_native
 bool_to_native = Bool::to_native
 
-u32_valid : U32T -> Bool
-u32_valid _ = True
+u32_valid = U32::valid
 u32_from_raw = U32::from_raw
 u32_to_raw = U32::to_raw
-u32_from_native : [32] -> U32T
-u32_from_native k = k
-u32_to_native : U32T -> [32]
-u32_to_native k = k
+u32_from_native = U32::from_native
+u32_to_native = U32::to_native
 
 symbol_valid = Symbol::valid
 symbol_from_raw = Symbol::from_raw

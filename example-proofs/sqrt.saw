@@ -7,24 +7,28 @@ include "../lib/soroban.saw";
 mod <- mir_load_module "../extra-examples/sqrt/target/linked-mir.json";
 
 // Initialize soroban verification with storage API
-soroban <- soroban_init mod ["storage"];
+soroban <- soroban_init mod ["u32_val", "storage"];
 
 // Bind Cryptol modules so that they are accessible in {{ ... }}
+let Values = soroban.cry.Values;
 let Storage = soroban.cry.Storage;
 
 // Declare specification for log2 function
 let log2_spec = soroban.spec "log2" (\(s : SorobanSpecAPI) -> do {
   // Declare a fresh symbolic [32]
-  x <- s.fresh "x" {| [32] |};
+  x <- mir_fresh_cryptol_var "x" {| [32] |};
+
   // Execute the function with x as argument
-  mir_execute_func [s.to_mir_value x];
+  mir_execute_func [mir_term x];
+
   // Check that the return value is correct
-  mir_return (s.to_mir_value {{
+  let correct = {{
     // We can express this in terms of Cryptol's built in lg2 function, but
     // Cryptol's lg2 rounds up and ours rounds down
     if 2 ^^ y == x \/ x == 0 then y else y - 1
     where y = lg2 x
-  }});
+  }};
+  mir_return (mir_term correct);
 });
 
 // Verify log2, and obtain an override for it
@@ -54,12 +58,12 @@ prove_print w4 {{ \x y1 y2 -> isSqrt x y1 /\ isSqrt x y2 ==> y1 == y2 }};
 
 // Declare specification for sqrt function
 let sqrt_spec = soroban.spec "sqrt" (\(s : SorobanSpecAPI) -> do {
-  x <- s.fresh "x" {| [32] |};
-  mir_execute_func [s.to_mir_value x];
+  x <- mir_fresh_cryptol_var "x" {| [32] |};
+  mir_execute_func [mir_term x];
   // Check that the function returns a (the) value which satisfies isSqrt x
-  y <- s.fresh "y" {| [32] |};
+  y <- mir_fresh_cryptol_var "y" {| [32] |};
   mir_postcond {{ isSqrt x y }};
-  mir_return (s.to_mir_value y);
+  mir_return (mir_term y);
 });
 
 // Verify sqrt, using the log2 override
@@ -75,24 +79,42 @@ sqrt_ov <- soroban.verify {
 // Declare specification for sqrt_cached function
 let sqrt_cached_spec = soroban.spec "sqrt_cached" (\(s : SorobanSpecAPI) -> do {
   // Declare a fresh symbolic Storage
+  // XXX: s.fresh is for values... should make a different hook for this
   storage <- s.fresh "storage" {| Storage::T |};
-  x <- s.fresh "x" {| [32] |};
-  // Get value in storage at x as a [32]
-  let cached = s.storage.get storage x {| [32] |};
-  // Assume that either there is no value, or there is one and it can be
-  // converted to [32] and it satisfies isSqrt x
-  mir_precond {{ Option::ok_implies (Option::ok_and (isSqrt x)) cached }};
+
+  // Declare a fresh variable for the argument
+  x <- mir_fresh_cryptol_var "x" {| [32] |};
+  let xval = {{ Values::u32_from_native x }};
+
+  // Get value in storage at x as an Option::T (Option::T Values::U32::T)
+  // outer None means there was no value
+  // inner None means the value wasn't a U32
+  let optopt_cached_val = s.storage.get storage xval {| Values::U32T |};
+
+  // If there is no value, assert True.
+  // If the value wasn't a U32, assert False.
+  // If there was a U32 value, assert isSqrt on it after converting to native.
+  mir_precond {{ Option::ok_implies (Option::ok_and (\y -> isSqrt x (Values::u32_to_native y))) optopt_cached_val }};
+
   // Set storage as the initial storage state
   s.storage.state storage;
+
   // Execute the function with an instance of Env and x
-  mir_execute_func [s.mir_value.Env (), s.to_mir_value x];
+  mir_execute_func [s.mir_value.Env (), mir_term x];
+
   // Declare y and constrain it to satisfy isSqrt x
-  y <- s.fresh "y" {| [32] |};
+  y <- mir_fresh_cryptol_var "y" {| [32] |};
+  let yval = {{ Values::u32_from_native y }};
   mir_postcond {{ isSqrt x y }};
+
   // Check that the final storage state is initial storage updated to y at x
-  s.storage.state (s.storage.set storage x y);
+  s.storage.state (s.storage.set storage xval yval);
+
   // Check that y is returned
-  mir_return (s.to_mir_value y);
+  // note: the Rust code returns u32, not U32Val, so use y (of type [32]
+  // which corresponds to u32) not yval (of type Values::U32::T which
+  // corresponds to U32Val)
+  mir_return (mir_term y);
 });
 
 // Verify sqrt_cached, using the sqrt override

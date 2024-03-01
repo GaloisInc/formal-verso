@@ -31,6 +31,7 @@ typedef SorobanAdt = {
 
   // from the soroban_env_common crate
   Bool_ : (() -> MIRAdt),
+  U32Val : (() -> MIRAdt),
   RawVal : (() -> MIRAdt),
   SymbolVal : (() -> MIRAdt),
   Void : (() -> MIRAdt)
@@ -77,12 +78,14 @@ typedef SorobanVerifyArgs = {
  *    - references to MIR symbols from the SDK
  *    - spec wrapper function
  *    - verify wrapper function
+ *    - assume wrapper function
  */
 typedef SorobanAPI = {
   cry: SorobanCry,
   adt : SorobanAdt,
   spec : (String -> (SorobanSpecAPI -> MIRSetup ()) -> MIRSetup ()),
-  verify : (SorobanVerifyArgs -> TopLevel MIRSpec)
+  verify : (SorobanVerifyArgs -> TopLevel MIRSpec),
+  assume : (SorobanVerifyArgs -> TopLevel MIRSpec)
 };
 
 /*
@@ -194,6 +197,8 @@ soroban_init <- do {
         // from the soroban_env_common crate
         Bool_ = find_when "bool_val"
           "soroban_env_common::raw_val::Bool",
+        U32Val = find_when "u32_val"
+          "soroban_env_common::num::U32Val",
         RawVal = find
           "soroban_env_common::raw_val::RawVal",
         SymbolVal = find_when "symbol"
@@ -352,7 +357,9 @@ soroban_init <- do {
           to_mir_value {{ Values::bool_to_raw x }}
         ]
       else if type_eq t {| Values::U32T |} then
-        mir_term x
+        mir_struct_value (soroban_adt.U32Val ()) [
+          to_mir_value {{ Values::u32_to_raw x }}
+        ]
       else if type_eq t {| Values::SymbolT |} then
         mir_struct_value (soroban_adt.Symbol ()) [
           mir_value.MaybeEnv (),
@@ -556,11 +563,20 @@ soroban_init <- do {
       mir_verify mod args.fun (concat sdk_overrides args.overrides)
         args.path_sat args.spec args.proof;
 
+    /*
+     * Hook for assuming a specification instead
+     * (intentionally has the same signature, even though some of it
+     * isn't used)
+     */
+    let soroban_assume (args : SorobanVerifyArgs) =
+      mir_unsafe_assume_spec mod args.fun args.spec;
+
     return {
       cry = soroban_cry,
       adt = soroban_adt,
       spec = soroban_spec,
-      verify = soroban_verify
+      verify = soroban_verify,
+      assume = soroban_assume
     };
 
   };

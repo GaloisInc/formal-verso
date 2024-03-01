@@ -15,10 +15,10 @@ soroban <- soroban_init mod [];
 let sum_spec count = soroban.spec "sum" (\(s : SorobanSpecAPI) -> do {
 
   // Execute the function with an instance of Env and the fixed count
-  mir_execute_func [s.mir_value.Env (), s.to_mir_value {{ `count : [32] }}];
+  mir_execute_func [s.mir_value.Env (), mir_term {{ `count : [32] }}];
 
   // Check that the result is sum of 0 up to (but not including) count
-  mir_return (s.to_mir_value {{ sum [0..<count] : [32] }});
+  mir_return (mir_term {{ sum [0..<count] : [32] }});
 
 });
 

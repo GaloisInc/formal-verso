@@ -376,12 +376,14 @@ submodule Raw where
    shallow_eq x y = x.bits == y.bits
 
    // val.rs lines 700-709
-   get_tag : T -> Tag
-   get_tag v = tag_of_val v
+   private
+      get_tag : T -> Tag
+      get_tag v = tag_of_val v
 
    // val.rs lines 726-729
-   has_tag : Tag -> T -> Bool
-   has_tag t rv = get_tag rv == t
+   private
+      has_tag : Tag -> T -> Bool
+      has_tag t v = tag_of_val v == t
 
    // val.rs lines 711-714
    get_body : T -> [BODY_BITS]
@@ -392,13 +394,15 @@ submodule Raw where
    has_body v w = body_of_val v == w
 
    // val.rs lines 731-736
-   from_body_and_tag : [BODY_BITS] -> Tag -> T
-   from_body_and_tag body tag = val_of_body_tag body tag
+   private
+      from_body_and_tag : [BODY_BITS] -> Tag -> T
+      from_body_and_tag body tag = val_of_body_tag body tag
 
    // val.rs lines 738-744
-   from_major_minor_and_tag : [MAJOR_BITS] -> [MINOR_BITS] -> Tag -> T
-   from_major_minor_and_tag major minor tag =
-      val_of_major_minor_tag major minor tag
+   private
+      from_major_minor_and_tag : [MAJOR_BITS] -> [MINOR_BITS] -> Tag -> T
+      from_major_minor_and_tag major minor tag =
+         val_of_major_minor_tag major minor tag
 
    // val.rs lines 746-749
    has_minor : T -> [MINOR_BITS] -> Bool

@@ -140,7 +140,6 @@ typedef SorobanSpecAPI = {
 
   fresh : (String -> Type -> MIRSetup Term),
 
-  mir_value : SorobanMIRItems,
   to_mir_value : (Term -> MIRValue),
   to_mir_type : (Type -> MIRType)
 
@@ -329,12 +328,6 @@ soroban_init <- do {
 
     let smi = make_soroban_mir_items mod features;
 
-
-    /*
-     * XXX this should be removed
-     */
-    let mir_value = smi;
-
     /*
      * Convert a value of a value type (recall the value types are
      * Cryptol types and have Cryptol values) to a mir_term.
@@ -394,7 +387,7 @@ soroban_init <- do {
         ]
       else if type_eq t {| Values::SymbolT |} then
         mir_struct_value (smi.SymbolType ()) [
-          mir_value.MaybeEnvVal (),
+          smi.MaybeEnvVal (),
           mir_struct_value (smi.SymbolValType ()) [
             to_mir_value {{ Values::symbol_to_raw x }}
           ]
@@ -482,7 +475,6 @@ soroban_init <- do {
          */
         fresh = soroban_value_fresh,
 
-        mir_value = mir_value,
         to_mir_value = to_mir_value,
         to_mir_type = to_mir_type
 
@@ -520,7 +512,7 @@ soroban_init <- do {
             store <- mir_fresh_cryptol_var "storage.has.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (smi.EnvType ()));
-            mir_points_to self (s.mir_value.EnvVal ());
+            mir_points_to self (smi.EnvVal ());
 
             k <- s.fresh "storage.has.k" {| Values::RawT |};
 
@@ -540,7 +532,7 @@ soroban_init <- do {
             store <- mir_fresh_cryptol_var "storage.get.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (smi.EnvType ()));
-            mir_points_to self (s.mir_value.EnvVal ());
+            mir_points_to self (smi.EnvVal ());
 
             k <- s.fresh "storage.get.k" {| Values::RawT |};
 
@@ -561,7 +553,7 @@ soroban_init <- do {
             store <- mir_fresh_cryptol_var "storage.put.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (smi.EnvType ()));
-            mir_points_to self (s.mir_value.EnvVal ());
+            mir_points_to self (smi.EnvVal ());
 
             k <- s.fresh "storage.put.k" {| Values::RawT |};
             v <- s.fresh "storage.put.v" {| Values::RawT |};

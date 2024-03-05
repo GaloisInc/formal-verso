@@ -95,7 +95,7 @@ let sqrt_cached_spec = soroban.spec "sqrt_cached" (\(s : SorobanSpecAPI) -> do {
   s.storage.state store;
 
   // Execute the function with an instance of Env and x
-  mir_execute_func [s.mir_value.EnvVal (), mir_term x];
+  mir_execute_func [soroban.smi.EnvVal (), mir_term x];
 
   // Declare y and constrain it to satisfy isSqrt x
   y <- mir_fresh_cryptol_var "y" {| [32] |};

@@ -9,10 +9,6 @@ mod <- mir_load_module "../extra-examples/sqrt/target/linked-mir.json";
 // Initialize soroban verification with storage API
 soroban <- soroban_init mod ["u32_val", "storage"];
 
-// Bind Cryptol modules so that they are accessible in {{ ... }}
-let Values = soroban.cry.Values;
-let Store = soroban.cry.Store;
-
 // Declare specification for log2 function
 let log2_spec = soroban.spec "log2" (\(s : SorobanSpecAPI) -> do {
   // Declare a fresh symbolic [32]

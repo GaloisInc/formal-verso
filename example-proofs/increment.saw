@@ -9,10 +9,6 @@ mod <- mir_load_module "../soroban-examples/increment/target/linked-mir.json";
 // Initialize soroban verification with storage and symbol APIs
 soroban <- soroban_init mod ["storage", "symbol", "u32_val"];
 
-// Bind Cryptol modules so that they are accessible in {{ ... }}
-let Values = soroban.cry.Values;
-let Store = soroban.cry.Store;
-
 // Compute Symbol value for COUNTER
 let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
 

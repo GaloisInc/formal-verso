@@ -12,20 +12,6 @@ Values <- cryptol_load "Values.cry";
 Store <- cryptol_load "Store.cry";
 
 /*
- * Cryptol modules we're using that are used after initialization and
- * therefore need to get passed around.
- */
-typedef SorobanCry = {
-  Values : CryptolModule,
-  //Void : CryptolModule,
-  //Bool_ : CryptolModule,
-  //Symbol : CryptolModule,
-  //RawVal : CryptolModule,
-
-  Store : CryptolModule
-};
-
-/*
  * Symbols extracted from the MIR
  */
 typedef SorobanAdt = {
@@ -83,14 +69,12 @@ typedef SorobanVerifyArgs = {
 
 /*
  * Material returned by the init function for use by the actual specs:
- *    - Cryptol modules
  *    - references to MIR symbols from the SDK
  *    - spec wrapper function
  *    - verify wrapper function
  *    - assume wrapper function
  */
 typedef SorobanAPI = {
-  cry: SorobanCry,
   adt : SorobanAdt,
   spec : (String -> (SorobanSpecAPI -> MIRSetup ()) -> MIRSetup ()),
   verify : (SorobanVerifyArgs -> TopLevel MIRSpec),
@@ -128,16 +112,6 @@ soroban_init <- do {
       return {
         storage = storage
       };
-    };
-
-    let soroban_cry : SorobanCry = {
-      Values = Values,
-      //Void = Void,
-      //Bool_ = Bool_,
-      //Symbol = Symbol,
-      //RawVal = RawVal,
-
-      Store = Store
     };
 
     let feat_implies feats (x, y) =
@@ -562,7 +536,6 @@ soroban_init <- do {
       mir_unsafe_assume_spec mod args.fun args.spec;
 
     return {
-      cry = soroban_cry,
       adt = soroban_adt,
       spec = soroban_spec,
       verify = soroban_verify,

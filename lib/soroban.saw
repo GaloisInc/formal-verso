@@ -570,13 +570,11 @@ soroban_init <- do {
       ("symbol", "maybe_env")
     ];
 
-    let smi = make_soroban_mir_items mod features;
-
     /*
      * Construct the "overrides" (checked or admitted SAW theorems)
      * for the SDK interfaces.
      */
-    sdk_overrides <- do {
+    let make_storage_overrides (smi : SorobanMIRItems) = do {
        if string_list.elem "storage" features then do {
           has_spec <- mir_unsafe_assume_spec mod
               "soroban_sdk::env::{impl#12}::has_contract_data"
@@ -592,6 +590,9 @@ soroban_init <- do {
        else
           return [];
     };
+
+    let smi = make_soroban_mir_items mod features;
+    sdk_overrides <- make_storage_overrides smi;
 
     /*
      * Hook for running verification

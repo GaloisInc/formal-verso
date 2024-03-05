@@ -134,9 +134,9 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
  *    - overrides list for functions from the SDK
  */
 typedef SorobanAPI = {
-  mod : MIRModule,
-  smi : SorobanMIRItems,
-  sdk_overrides : [MIRSpec]
+   mod : MIRModule,
+   smi : SorobanMIRItems,
+   sdk_overrides : [MIRSpec]
 };
 
 
@@ -396,7 +396,7 @@ soroban_storage_state <- do {
  * Update the internally tracked model of the storage contents with a
  * new Store.
  */
-let soroban_storage_update_state (store : Term /* Store */) : MIRSetup ()= do {
+let soroban_storage_update_state (store : Term /* Store */) : MIRSetup () = do {
    mir_ghost_value soroban_storage_state.ghoststate store;
 };
 
@@ -526,14 +526,14 @@ let storage_put_spec (smi : SorobanMIRItems) = do {
 let make_storage_overrides (smi : SorobanMIRItems) mod features = do {
    if string_list.elem "storage" features then do {
       has_spec <- mir_unsafe_assume_spec mod
-          "soroban_sdk::env::{impl#12}::has_contract_data"
-          (storage_has_spec smi);
+         "soroban_sdk::env::{impl#12}::has_contract_data"
+         (storage_has_spec smi);
       get_spec <- mir_unsafe_assume_spec mod
-          "soroban_sdk::env::{impl#12}::get_contract_data"
-          (storage_get_spec smi);
+         "soroban_sdk::env::{impl#12}::get_contract_data"
+         (storage_get_spec smi);
       put_spec <- mir_unsafe_assume_spec mod
-          "soroban_sdk::env::{impl#12}::put_contract_data"
-          (storage_put_spec smi);
+         "soroban_sdk::env::{impl#12}::put_contract_data"
+         (storage_put_spec smi);
       return [has_spec, get_spec, put_spec];
    }
    else
@@ -558,16 +558,16 @@ typedef SorobanVerifyArgs = {
 /*
  * Hook for running verification
  */
-let soroban_verify (soroban: SorobanAPI) (args : SorobanVerifyArgs) =
+let soroban_verify (soroban : SorobanAPI) (args : SorobanVerifyArgs) =
    mir_verify soroban.mod args.fun (concat soroban.sdk_overrides args.overrides)
-      args.path_sat args.spec args.proof;
+        args.path_sat args.spec args.proof;
 
 /*
  * Hook for assuming a specification instead
  * (intentionally has the same signature, even though some of it
  * isn't used)
  */
-let soroban_assume (soroban: SorobanAPI) (args : SorobanVerifyArgs) =
+let soroban_assume (soroban : SorobanAPI) (args : SorobanVerifyArgs) =
    mir_unsafe_assume_spec soroban.mod args.fun args.spec;
 
 
@@ -586,22 +586,22 @@ let soroban_assume (soroban: SorobanAPI) (args : SorobanVerifyArgs) =
  */
 let soroban_init (mod : MIRModule) (features : [String]) : TopLevel SorobanAPI = do {
 
-    let feat_implies feats (x, y) =
+   let feat_implies feats (x, y) =
       if string_list.elem x feats then concat [y] feats else feats;
 
-    let features = list.foldl feat_implies features [
+   let features = list.foldl feat_implies features [
       ("storage", "bool_val"),
       ("storage", "void_val"),
       ("symbol", "maybe_env")
-    ];
+   ];
 
-    let smi = make_soroban_mir_items mod features;
+   let smi = make_soroban_mir_items mod features;
 
-    storage_overrides <- make_storage_overrides smi mod features;
+   storage_overrides <- make_storage_overrides smi mod features;
 
-    return {
+   return {
       mod = mod,
       smi = smi,
       sdk_overrides = storage_overrides
-    };
+   };
 };

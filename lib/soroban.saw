@@ -260,7 +260,7 @@ let soroban_value_type_to_mir (smi : SorobanMIRItems) t =
    else if type_eq t {| Values::BoolT |} then
       mir_adt (smi.BoolType ())
    else if type_eq t {| Values::U32T |} then
-      mir_u32
+      mir_adt (smi.U32ValType ())
    else if type_eq t {| Values::SymbolT |} then
       mir_adt (smi.SymbolType ())
    else if type_eq t {| Values::RawT |} then

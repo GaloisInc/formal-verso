@@ -3,6 +3,15 @@ enable_experimental;
 include "list.saw";
 
 /*
+ * Load the cryptol modules.
+ */
+
+Util <- cryptol_load "Util.cry";
+Option <- cryptol_load "Option.cry";
+Values <- cryptol_load "Values.cry";
+Store <- cryptol_load "Store.cry";
+
+/*
  * Cryptol modules we're using that are used after initialization and
  * therefore need to get passed around.
  */
@@ -104,27 +113,8 @@ typedef SorobanAPI = {
  */
 soroban_init <- do {
 
-  /*
-   * Load the cryptol modules.
-   */
-
+  // XXX this is redundant and should be removed
   Util <- cryptol_load "Util.cry";
-  Option <- cryptol_load "Option.cry";
-
-  //Void <- cryptol_load "Void.cry";
-  //Bool_ <- cryptol_load "Bool.cry";
-  //U32 <- cryptol_load "U32.cry";
-  //Symbol <- cryptol_load "Symbol.cry";
-  //RawVal <- cryptol_load "RawVal.cry";
-  Values <- cryptol_load "Values.cry";
-  // can't do this, alas
-  //Void <- cryptol_extract_submodule Values "Void";
-  //let Bool_ = cryptol_extract_submodule Values "Bool";
-  //let U32 = cryptol_extract_submodule Values "U32";
-  //let Symbol = cryptol_extract_submodule Values "Symbol";
-  //let Raw <- cryptol_extract_submodule Values "Raw";
-
-  Store <- cryptol_load "Store.cry";
 
   /*
    * I'm not sure what this layer of indirection buys us.

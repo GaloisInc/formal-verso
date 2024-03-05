@@ -11,6 +11,10 @@ Option <- cryptol_load "Option.cry";
 Values <- cryptol_load "Values.cry";
 Store <- cryptol_load "Store.cry";
 
+
+////////////////////////////////////////////////////////////
+// MIR symbols
+
 /*
  * Symbols extracted from the MIR
  */
@@ -32,6 +36,17 @@ typedef SorobanAdt = {
   Void : (() -> MIRAdt)
 };
 
+typedef MirValues = {
+    Guest : (() -> MIRValue),
+    Env : (() -> MIRValue),
+    MaybeEnv : (() -> MIRValue),
+    Storage : (() -> MIRValue)
+};
+
+
+////////////////////////////////////////////////////////////
+// interfacing types
+
 typedef SorobanSpecAPI = {
 
   storage : {
@@ -45,12 +60,7 @@ typedef SorobanSpecAPI = {
 
   fresh : (String -> Type -> MIRSetup Term),
 
-  mir_value : {
-    Guest : (() -> MIRValue),
-    Env : (() -> MIRValue),
-    MaybeEnv : (() -> MIRValue),
-    Storage : (() -> MIRValue)
-  },
+  mir_value : MirValues,
   to_mir_value : (Term -> MIRValue),
   to_mir_type : (Type -> MIRType)
 

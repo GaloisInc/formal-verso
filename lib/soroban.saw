@@ -326,8 +326,6 @@ soroban_init <- do {
       ("symbol", "maybe_env")
     ];
 
-    let smi = make_soroban_mir_items mod features;
-
     /*
      * Extract the MIR-level type for type T.
      *
@@ -343,7 +341,7 @@ soroban_init <- do {
      * and I think we're playing fast and loose with the distinction
      * between the last two, which is bad.
      */
-    let to_mir_type t =
+    let to_mir_type (smi : SorobanMIRItems) t =
       if type_eq t {| Values::VoidT |} then
         mir_adt (smi.VoidType ())
       else if type_eq t {| Values::BoolT |} then
@@ -400,25 +398,25 @@ soroban_init <- do {
      * the raw layer; the accessor functions for the wrapper types
      * seem to work ok.
      */
-    rec to_mir_value x =
+    rec to_mir_value (smi : SorobanMIRItems) x =
       let t = type x in
       if type_eq t {| Values::VoidT |} then
         mir_struct_value (smi.VoidType ()) [
-          to_mir_value {{ Values::void_to_raw x }}
+          to_mir_value smi {{ Values::void_to_raw x }}
         ]
       else if type_eq t {| Values::BoolT |} then
         mir_struct_value (smi.BoolType ()) [
-          to_mir_value {{ Values::bool_to_raw x }}
+          to_mir_value smi {{ Values::bool_to_raw x }}
         ]
       else if type_eq t {| Values::U32T |} then
         mir_struct_value (smi.U32ValType ()) [
-          to_mir_value {{ Values::u32_to_raw x }}
+          to_mir_value smi {{ Values::u32_to_raw x }}
         ]
       else if type_eq t {| Values::SymbolT |} then
         mir_struct_value (smi.SymbolType ()) [
           smi.MaybeEnvVal (),
           mir_struct_value (smi.SymbolValType ()) [
-            to_mir_value {{ Values::symbol_to_raw x }}
+            to_mir_value smi {{ Values::symbol_to_raw x }}
           ]
         ]
       else if type_eq t {| Values::RawT |} then
@@ -429,6 +427,8 @@ soroban_init <- do {
         ]
       else
         run (fail (str_concat (show t) " cannot be converted to a MIR value"));
+
+    let smi = make_soroban_mir_items mod features;
 
     /*
      * Spec for the storage interface.
@@ -475,8 +475,8 @@ soroban_init <- do {
          */
         fresh = soroban_value_fresh,
 
-        to_mir_value = to_mir_value,
-        to_mir_type = to_mir_type
+        to_mir_value = to_mir_value smi,
+        to_mir_type = to_mir_type smi
 
       };
 
@@ -499,9 +499,9 @@ soroban_init <- do {
       let return_ok (x : Term) : MIRSetup () =
         mir_return
           (mir_enum_value
-            (smi.ResultInfallibleType (to_mir_type (type x)))
+            (smi.ResultInfallibleType (to_mir_type smi (type x)))
             "Ok"
-            [to_mir_value x])
+            [to_mir_value smi x])
       in
 
       list.sequence [
@@ -518,7 +518,7 @@ soroban_init <- do {
 
             s.storage.state store;
 
-            mir_execute_func [self, s.to_mir_value k];
+            mir_execute_func [self, to_mir_value smi k];
 
             s.storage.state store;
 
@@ -539,7 +539,7 @@ soroban_init <- do {
             mir_precond {{ Store::has store k }};
             s.storage.state store;
 
-            mir_execute_func [self, s.to_mir_value k];
+            mir_execute_func [self, to_mir_value smi k];
 
             s.storage.state store;
 
@@ -560,7 +560,7 @@ soroban_init <- do {
 
             s.storage.state store;
 
-            mir_execute_func [self, s.to_mir_value k, s.to_mir_value v];
+            mir_execute_func [self, to_mir_value smi k, to_mir_value smi v];
 
             s.storage.state {{ Store::set store k v }};
 

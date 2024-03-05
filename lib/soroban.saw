@@ -130,6 +130,23 @@ let soroban_value_valid (t : Type) : Term =
       run (fail (str_concat (show t) " has no validity predicate"));
 
 /*
+ * Generate a fresh var of the requested value type.
+ *
+ * Note: only for value types.
+ *
+ * Note: we used to cons the name of the current spec onto the name
+ * passed in. We don't do that any more because it requires all kinds
+ * of contortions to remember the name in a useful way.
+ */
+let soroban_value_fresh (name : String) (t : Type) : MIRSetup Term = do {
+          //let name' = str_concats [spec_name, "::", name];
+          x <- mir_fresh_cryptol_var name t;
+          let t_valid = soroban_value_valid t;
+          mir_assert {{ t_valid x }};
+          return x;
+        };
+
+/*
  * Convert from a specific value type to Values::Raw::T.
  * Value types only.
  *
@@ -432,13 +449,7 @@ soroban_init <- do {
         /*
          * Generate a fresh var of the requested value type.
          */
-        fresh = \name t -> do {
-          //let name' = str_concats [spec_name, "::", name];
-          x <- mir_fresh_cryptol_var name t;
-          let t_valid = soroban_value_valid t;
-          mir_assert {{ t_valid x }};
-          return x;
-        },
+        fresh = soroban_value_fresh,
 
         mir_value = mir_value,
         to_mir_value = to_mir_value,

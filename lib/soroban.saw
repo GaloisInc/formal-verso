@@ -451,85 +451,85 @@ let soroban_store_set (store : Term /* Store */) (k : Term) (v : Term) =
    let v_to_raw = soroban_value_to_raw (type v) in
    {{ Store::set store (k_to_raw k) (v_to_raw v) }};
 
-      let return_ok (smi : SorobanMIRItems) (x : Term) : MIRSetup () =
-        mir_return
-          (mir_enum_value
-            (smi.ResultInfallibleType (soroban_value_type_to_mir smi (type x)))
-            "Ok"
-            [soroban_value_to_mir smi x])
-      ;
+let return_ok (smi : SorobanMIRItems) (x : Term) : MIRSetup () =
+   mir_return
+      (mir_enum_value
+         (smi.ResultInfallibleType (soroban_value_type_to_mir smi (type x)))
+         "Ok"
+         [soroban_value_to_mir smi x])
+;
 
-      /*
-       * Spec for has_contract_data()
-       */
-      let storage_has_spec (smi : SorobanMIRItems) = do {
-            store <- mir_fresh_cryptol_var "storage.has.store" {| Store::T |};
+/*
+ * Spec for has_contract_data()
+ */
+let storage_has_spec (smi : SorobanMIRItems) = do {
+   store <- mir_fresh_cryptol_var "storage.has.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (smi.EnvType ()));
-            mir_points_to self (smi.EnvVal ());
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
 
-            k <- soroban_value_fresh "storage.has.k" {| Values::RawT |};
+   k <- soroban_value_fresh "storage.has.k" {| Values::RawT |};
 
-            soroban_storage_update_state store;
+   soroban_storage_update_state store;
 
-            mir_execute_func [self, soroban_value_to_mir smi k];
+   mir_execute_func [self, soroban_value_to_mir smi k];
 
-            soroban_storage_update_state store;
+   soroban_storage_update_state store;
 
-            return_ok smi {{ Values::bool_from_native (Store::has store k) }};
+   return_ok smi {{ Values::bool_from_native (Store::has store k) }};
 
-          }
-      ;
+}
+;
 
-      /*
-       * Spec for get_contract_data()
-       */
-      let storage_get_spec (smi : SorobanMIRItems) = do {
-            store <- mir_fresh_cryptol_var "storage.get.store" {| Store::T |};
+/*
+ * Spec for get_contract_data()
+ */
+let storage_get_spec (smi : SorobanMIRItems) = do {
+   store <- mir_fresh_cryptol_var "storage.get.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (smi.EnvType ()));
-            mir_points_to self (smi.EnvVal ());
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
 
-            k <- soroban_value_fresh "storage.get.k" {| Values::RawT |};
+   k <- soroban_value_fresh "storage.get.k" {| Values::RawT |};
 
-            mir_precond {{ Store::has store k }};
-            soroban_storage_update_state store;
+   mir_precond {{ Store::has store k }};
+   soroban_storage_update_state store;
 
-            mir_execute_func [self, soroban_value_to_mir smi k];
+   mir_execute_func [self, soroban_value_to_mir smi k];
 
-            soroban_storage_update_state store;
+   soroban_storage_update_state store;
 
-            return_ok smi {{ (Store::get store k).value }};
+   return_ok smi {{ (Store::get store k).value }};
 
-          }
-      ;
+}
+;
 
-      /*
-       * Spec for put_contract_data
-       *
-       * XXX: why are we calling our internal things "set" when the SDK uses "put"?
-       */
-      let storage_put_spec (smi : SorobanMIRItems) = do {
-            store <- mir_fresh_cryptol_var "storage.put.store" {| Store::T |};
+/*
+ * Spec for put_contract_data
+ *
+ * XXX: why are we calling our internal things "set" when the SDK uses "put"?
+ */
+let storage_put_spec (smi : SorobanMIRItems) = do {
+   store <- mir_fresh_cryptol_var "storage.put.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (smi.EnvType ()));
-            mir_points_to self (smi.EnvVal ());
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
 
-            k <- soroban_value_fresh "storage.put.k" {| Values::RawT |};
-            v <- soroban_value_fresh "storage.put.v" {| Values::RawT |};
+   k <- soroban_value_fresh "storage.put.k" {| Values::RawT |};
+   v <- soroban_value_fresh "storage.put.v" {| Values::RawT |};
 
-            soroban_storage_update_state store;
+   soroban_storage_update_state store;
 
-            let k_val = soroban_value_to_mir smi k;
-            let v_val = soroban_value_to_mir smi v;
-            mir_execute_func [self, k_val, v_val];
+   let k_val = soroban_value_to_mir smi k;
+   let v_val = soroban_value_to_mir smi v;
+   mir_execute_func [self, k_val, v_val];
 
-            soroban_storage_update_state {{ Store::set store k v }};
+   soroban_storage_update_state {{ Store::set store k v }};
 
-            return_ok smi {{ Values::unit }};
+   return_ok smi {{ Values::unit }};
 
-          }
-      ;
+}
+;
 
 
 ////////////////////////////////////////////////////////////

@@ -379,6 +379,27 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
 
 
 ////////////////////////////////////////////////////////////
+// SDK storage interface
+
+/*
+ * The model of the storage contents. Because the ghost state we keep
+ * it in is mutable, it doesn't need to be passed around and can live
+ * as a global here. Wrap it in a type to help prevent accidents.
+ */
+typedef SorobanStorageState = {
+   ghoststate : Ghost
+};
+
+soroban_storage_state <- do {
+   ghoststate <- declare_ghost_state "Soroban::storage";
+   let state = {
+      ghoststate = ghoststate
+   };
+   return state;
+};
+
+
+////////////////////////////////////////////////////////////
 // init
 
 /*
@@ -407,13 +428,6 @@ soroban_init <- do {
   let soroban_init (mod : MIRModule) (features : [String])
   : TopLevel SorobanAPI = do {
 
-    state <- do {
-      storage <- declare_ghost_state "Soroban::storage";
-      return {
-        storage = storage
-      };
-    };
-
     let feat_implies feats (x, y) =
       if string_list.elem x feats then concat [y] feats else feats;
 
@@ -435,7 +449,7 @@ soroban_init <- do {
     let spec_storage = {
 
       state = \store -> do {
-        mir_ghost_value state.storage store;
+        mir_ghost_value soroban_storage_state.ghoststate store;
       },
 
       has = \store k ->

@@ -531,6 +531,27 @@ let storage_put_spec (smi : SorobanMIRItems) = do {
    return_ok smi {{ Values::unit }};
 };
 
+/*
+ * Construct the "overrides" (checked or admitted SAW theorems)
+ * for the SDK interfaces.
+ */
+let make_storage_overrides (smi : SorobanMIRItems) mod features = do {
+   if string_list.elem "storage" features then do {
+      has_spec <- mir_unsafe_assume_spec mod
+          "soroban_sdk::env::{impl#12}::has_contract_data"
+          (storage_has_spec smi);
+      get_spec <- mir_unsafe_assume_spec mod
+          "soroban_sdk::env::{impl#12}::get_contract_data"
+          (storage_get_spec smi);
+      put_spec <- mir_unsafe_assume_spec mod
+          "soroban_sdk::env::{impl#12}::put_contract_data"
+          (storage_put_spec smi);
+      return [has_spec, get_spec, put_spec];
+   }
+   else
+      return [];
+};
+
 
 ////////////////////////////////////////////////////////////
 // init
@@ -570,29 +591,8 @@ soroban_init <- do {
       ("symbol", "maybe_env")
     ];
 
-    /*
-     * Construct the "overrides" (checked or admitted SAW theorems)
-     * for the SDK interfaces.
-     */
-    let make_storage_overrides (smi : SorobanMIRItems) = do {
-       if string_list.elem "storage" features then do {
-          has_spec <- mir_unsafe_assume_spec mod
-              "soroban_sdk::env::{impl#12}::has_contract_data"
-              (storage_has_spec smi);
-          get_spec <- mir_unsafe_assume_spec mod
-              "soroban_sdk::env::{impl#12}::get_contract_data"
-              (storage_get_spec smi);
-          put_spec <- mir_unsafe_assume_spec mod
-              "soroban_sdk::env::{impl#12}::put_contract_data"
-              (storage_put_spec smi);
-          return [has_spec, get_spec, put_spec];
-       }
-       else
-          return [];
-    };
-
     let smi = make_soroban_mir_items mod features;
-    sdk_overrides <- make_storage_overrides smi;
+    sdk_overrides <- make_storage_overrides smi mod features;
 
     /*
      * Hook for running verification

@@ -45,81 +45,81 @@ typedef SorobanMIRItems = {
 };
 
 let make_soroban_mir_items mod features : SorobanMIRItems =
-      /*
-       * Tools for looking up stuff in the MIR.
-       */
-      let find adt_name =
-        let adt = mir_find_adt mod adt_name [] in
-        \() -> adt
-      in
-      let find_when feat adt_name =
-        if string_list.elem feat features then
-          find adt_name
-        else
-          \() -> run (fail (str_concats [
-            "Feature \"", feat, "\" is required for type ", adt_name
-          ]))
-      in
+   /*
+    * Tools for looking up stuff in the MIR.
+    */
+   let find adt_name =
+     let adt = mir_find_adt mod adt_name [] in
+     \() -> adt
+   in
+   let find_when feat adt_name =
+     if string_list.elem feat features then
+       find adt_name
+     else
+       \() -> run (fail (str_concats [
+         "Feature \"", feat, "\" is required for type ", adt_name
+       ]))
+   in
 
-      /*
-       * Bind handles for various SDK types.
-       */
+   /*
+    * Bind handles for various SDK types.
+    */
 
-      // non-soroban
-      let InfallibleType = find "core::convert::Infallible" in
-      let ResultInfallibleType (t : MIRType) =
-         mir_find_adt mod "core::result::Result" [t, mir_adt (InfallibleType ())]
-      in
+   // non-soroban
+   let InfallibleType = find "core::convert::Infallible" in
+   let ResultInfallibleType (t : MIRType) =
+      mir_find_adt mod "core::result::Result" [t, mir_adt (InfallibleType ())]
+   in
+
+   // from the soroban_env_guest crate
+   let GuestType = find "soroban_env_guest::guest::Guest" in
+
+   // from the soroban_sdk crate
+   let EnvType = find "soroban_sdk::env::Env" in
+   let MaybeEnvType = find_when "maybe_env" "soroban_sdk::env::MaybeEnv" in
+   let StorageType = find_when "storage" "soroban_sdk::storage::Storage" in
+   let SymbolType = find_when "symbol" "soroban_sdk::symbol::Symbol" in
+
+   // from the soroban_env_common crate
+   let BoolType = find_when "bool_val" "soroban_env_common::raw_val::Bool" in
+   let U32ValType = find_when "u32_val" "soroban_env_common::num::U32Val" in
+   let RawValType = find "soroban_env_common::raw_val::RawVal" in
+   let SymbolValType = find_when "symbol" "soroban_env_common::symbol::Symbol" in
+   let VoidType = find_when "void_val" "soroban_env_common::raw_val::Void" in
+
+   let GuestVal () =
+     mir_struct_value (GuestType ()) [] in
+   let EnvVal () =
+     mir_struct_value (EnvType ()) [GuestVal ()] in
+   let MaybeEnvVal () =
+     mir_struct_value (MaybeEnvType ()) [GuestVal ()] in
+   let StorageVal () =
+     mir_struct_value (StorageType ()) [EnvVal ()] in
+
+   {
+      InfallibleType = InfallibleType,
+      ResultInfallibleType = ResultInfallibleType,
 
       // from the soroban_env_guest crate
-      let GuestType = find "soroban_env_guest::guest::Guest" in
+      GuestType = GuestType,
+      GuestVal = GuestVal,
 
       // from the soroban_sdk crate
-      let EnvType = find "soroban_sdk::env::Env" in
-      let MaybeEnvType = find_when "maybe_env" "soroban_sdk::env::MaybeEnv" in
-      let StorageType = find_when "storage" "soroban_sdk::storage::Storage" in
-      let SymbolType = find_when "symbol" "soroban_sdk::symbol::Symbol" in
+      EnvType = EnvType,
+      EnvVal = EnvVal,
+      MaybeEnvType = MaybeEnvType,
+      MaybeEnvVal = MaybeEnvVal,
+      StorageType = StorageType,
+      StorageVal = StorageVal,
+      SymbolType = SymbolType,
 
       // from the soroban_env_common crate
-      let BoolType = find_when "bool_val" "soroban_env_common::raw_val::Bool" in
-      let U32ValType = find_when "u32_val" "soroban_env_common::num::U32Val" in
-      let RawValType = find "soroban_env_common::raw_val::RawVal" in
-      let SymbolValType = find_when "symbol" "soroban_env_common::symbol::Symbol" in
-      let VoidType = find_when "void_val" "soroban_env_common::raw_val::Void" in
-
-      let GuestVal () =
-        mir_struct_value (GuestType ()) [] in
-      let EnvVal () =
-        mir_struct_value (EnvType ()) [GuestVal ()] in
-      let MaybeEnvVal () =
-        mir_struct_value (MaybeEnvType ()) [GuestVal ()] in
-      let StorageVal () =
-        mir_struct_value (StorageType ()) [EnvVal ()] in
-
-      {
-         InfallibleType = InfallibleType,
-         ResultInfallibleType = ResultInfallibleType,
-
-        // from the soroban_env_guest crate
-        GuestType = GuestType,
-        GuestVal = GuestVal,
-
-        // from the soroban_sdk crate
-        EnvType = EnvType,
-        EnvVal = EnvVal,
-        MaybeEnvType = MaybeEnvType,
-        MaybeEnvVal = MaybeEnvVal,
-        StorageType = StorageType,
-        StorageVal = StorageVal,
-        SymbolType = SymbolType,
-
-        // from the soroban_env_common crate
-        BoolType = BoolType,
-        U32ValType = U32ValType,
-        RawValType = RawValType,
-        SymbolValType = SymbolValType,
-        VoidType = VoidType
-      };
+      BoolType = BoolType,
+      U32ValType = U32ValType,
+      RawValType = RawValType,
+      SymbolValType = SymbolValType,
+      VoidType = VoidType
+   };
 
 
 ////////////////////////////////////////////////////////////

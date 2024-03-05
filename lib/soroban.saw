@@ -87,6 +87,8 @@ typedef SorobanAPI = {
 
 /*
  * Hook for dynamic type dispatch on the value types.
+ *
+ * This should really be module-private if there were such a thing.
  */
 let type_eq (t1 : Type) (t2 : Type) : Bool =
    let s1 = show t1 in
@@ -104,9 +106,12 @@ let type_eq (t1 : Type) (t2 : Type) : Bool =
  * unsafe casts and we want to interoperate with it as much as
  * possible.
  *
- * valid : (t : Type) -> t -> Bit
+ * The real type is:
+ *    soroban_value_valid : (t : Type) -> t -> Bit
+ *
+ * What's here returns a Cryptol function from Values.
  */
-let valid (t : Type) : Term =
+let soroban_value_valid (t : Type) : Term =
    if type_eq t {| Values::VoidT |} then
       {{ Values::void_valid }}
    else if type_eq t {| Values::BoolT |} then
@@ -118,18 +123,22 @@ let valid (t : Type) : Term =
    else if type_eq t {| Values::RawT |} then
       {{ Values::raw_valid }}
    else if type_eq t {| Store::T |} then
-      // XXX: this gets passed here, but shouldn't be. ignore it
+      // XXX: this gets passed here, but shouldn't be. ignore it for now
       // (this logic is for value types!)
       {{ \_ -> True }}
    else
       run (fail (str_concat (show t) " has no validity predicate"));
 
 /*
- * Convert from a specific value type to Values::Raw::T
+ * Convert from a specific value type to Values::Raw::T.
+ * Value types only.
  *
- * to_raw : (t : Type) -> t -> Values::Raw::T
+ * The real type is:
+ *    soroban_value_to_raw : (t : Type) -> t -> Values::Raw::T
+ *
+ * What's here returns a Cryptol function from Values.
  */
-let to_raw (t : Type) : Term =
+let soroban_value_to_raw (t : Type) : Term =
    if type_eq t {| Values::VoidT |} then
       {{ Values::void_to_raw }}
    else if type_eq t {| Values::BoolT |} then
@@ -148,9 +157,12 @@ let to_raw (t : Type) : Term =
  * Returns None if the raw value is not actually a value
  * of the right type. Crashes if the type is wrong.
  *
- * from_raw : (t : Type) -> Values::Raw::T -> Option t
+ * The real type is:
+ *    soroban_value_from_raw : (t : Type) -> Values::Raw::T -> Option::T t
+ *
+ * What's here returns a Cryptol function from Values.
  */
-let from_raw (t : Type) : Term =
+let soroban_value_from_raw (t : Type) : Term =
    if type_eq t {| Values::VoidT |} then
       {{ Values::void_from_raw }}
    else if type_eq t {| Values::BoolT |} then
@@ -391,19 +403,19 @@ soroban_init <- do {
       },
 
       has = \store k ->
-        let k_to_raw = to_raw (type k) in
+        let k_to_raw = soroban_value_to_raw (type k) in
         {{ Store::has store (k_to_raw k) }},
 
       get = \store k tv ->
-        let k_to_raw = to_raw (type k) in
-        let v_from_raw = from_raw tv in
+        let k_to_raw = soroban_value_to_raw (type k) in
+        let v_from_raw = soroban_value_from_raw tv in
         {{ Option::fmap
             (Store::get store (k_to_raw k))
             v_from_raw }},
 
       set = \store k v ->
-        let k_to_raw = to_raw (type k) in
-        let v_to_raw = to_raw (type v) in
+        let k_to_raw = soroban_value_to_raw (type k) in
+        let v_to_raw = soroban_value_to_raw (type v) in
         {{ Store::set store (k_to_raw k) (v_to_raw v) }}
 
     };
@@ -422,7 +434,7 @@ soroban_init <- do {
          */
         fresh = \name t -> do {
           x <- mir_fresh_cryptol_var (str_concats [spec_name, "::", name]) t;
-          let t_valid = valid t;
+          let t_valid = soroban_value_valid t;
           mir_assert {{ t_valid x }};
           return x;
         },

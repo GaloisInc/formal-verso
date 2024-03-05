@@ -11,7 +11,7 @@ soroban <- soroban_init mod ["u32_val", "storage"];
 
 // Bind Cryptol modules so that they are accessible in {{ ... }}
 let Values = soroban.cry.Values;
-let Storage = soroban.cry.Storage;
+let Store = soroban.cry.Store;
 
 // Declare specification for log2 function
 let log2_spec = soroban.spec "log2" (\(s : SorobanSpecAPI) -> do {
@@ -78,26 +78,26 @@ sqrt_ov <- soroban.verify {
 
 // Declare specification for sqrt_cached function
 let sqrt_cached_spec = soroban.spec "sqrt_cached" (\(s : SorobanSpecAPI) -> do {
-  // Declare a fresh symbolic Storage
+  // Declare a fresh symbolic Store
   // XXX: s.fresh is for values... should make a different hook for this
-  storage <- s.fresh "storage" {| Storage::T |};
+  store <- s.fresh "store" {| Store::T |};
 
   // Declare a fresh variable for the argument
   x <- mir_fresh_cryptol_var "x" {| [32] |};
   let xval = {{ Values::u32_from_native x }};
 
-  // Get value in storage at x as an Option::T (Option::T Values::U32::T)
+  // Get value in the store at x as an Option::T (Option::T Values::U32::T)
   // outer None means there was no value
   // inner None means the value wasn't a U32
-  let optopt_cached_val = s.storage.get storage xval {| Values::U32T |};
+  let optopt_cached_val = s.storage.get store xval {| Values::U32T |};
 
   // If there is no value, assert True.
   // If the value wasn't a U32, assert False.
   // If there was a U32 value, assert isSqrt on it after converting to native.
   mir_precond {{ Option::ok_implies (Option::ok_and (\y -> isSqrt x (Values::u32_to_native y))) optopt_cached_val }};
 
-  // Set storage as the initial storage state
-  s.storage.state storage;
+  // Set store as the initial storage state
+  s.storage.state store;
 
   // Execute the function with an instance of Env and x
   mir_execute_func [s.mir_value.Env (), mir_term x];
@@ -107,8 +107,8 @@ let sqrt_cached_spec = soroban.spec "sqrt_cached" (\(s : SorobanSpecAPI) -> do {
   let yval = {{ Values::u32_from_native y }};
   mir_postcond {{ isSqrt x y }};
 
-  // Check that the final storage state is initial storage updated to y at x
-  s.storage.state (s.storage.set storage xval yval);
+  // Check that the final storage state is initial store updated to y at x
+  s.storage.state (s.storage.set store xval yval);
 
   // Check that y is returned
   // note: the Rust code returns u32, not U32Val, so use y (of type [32]

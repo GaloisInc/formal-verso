@@ -11,7 +11,7 @@ soroban <- soroban_init mod ["storage", "symbol", "u32_val"];
 
 // Bind Cryptol modules so that they are accessible in {{ ... }}
 let Values = soroban.cry.Values;
-let Storage = soroban.cry.Storage;
+let Store = soroban.cry.Store;
 
 // Compute Symbol value for COUNTER
 let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
@@ -19,11 +19,11 @@ let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
 // Declare specification for increment function
 let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
 
-  // Declare a fresh symbolic Storage
-  storage <- s.fresh "storage" {| Storage::T |};
+  // Declare a fresh symbolic Store
+  store <- s.fresh "store" {| Store::T |};
 
-  // Get value in storage at COUNTER as a Values::U32::T
-  let counter_val = s.storage.get storage COUNTER {| Values::U32T |};
+  // Get value in the store at COUNTER as a Values::U32::T
+  let counter_val = s.storage.get store COUNTER {| Values::U32T |};
   // Assume that the conversion is successful, or that there was no
   // value set
   count <- option.unwrap {{ Option::unwrap_or counter_val (Option::ok Values::u32_zero) }};
@@ -32,8 +32,8 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
   // Assume count < 1000 so that we don't get overflow
   mir_precond {{ ncount < 1000 }};
 
-  // Set storage as the initial storage state
-  s.storage.state storage;
+  // Set store as the initial storage state
+  s.storage.state store;
 
   // Execute the function with an instance of Env
   mir_execute_func [s.mir_value.Env ()];
@@ -42,9 +42,9 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
   let ncount' = {{ ncount + 1 }};
   let count' = {{ Values::u32_from_native ncount' }};
 
-  // Check that final storage state is initial storage updated to count' at
+  // Check that final storage state is initial store updated to count' at
   // COUNTER
-  s.storage.state (s.storage.set storage COUNTER count');
+  s.storage.state (s.storage.set store COUNTER count');
 
   // Check that count' is returned
   mir_return (mir_term ncount');

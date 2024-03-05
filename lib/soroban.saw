@@ -382,6 +382,14 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
 // SDK storage interface
 
 /*
+ * Spec for the storage interface.
+ *
+ * For now at least the Cryptol-level store is written
+ * purely in terms of Values::Raw::T and the type wrapping happens
+ * here. It's possible that should change, but we'll see.
+ */
+
+/*
  * The model of the storage contents. Because the ghost state we keep
  * it in is mutable, it doesn't need to be passed around and can live
  * as a global here. Wrap it in a type to help prevent accidents.
@@ -397,6 +405,48 @@ soroban_storage_state <- do {
    };
    return state;
 };
+
+/*
+ * Update the internally tracked model of the storage contents with a
+ * new Store.
+ */
+let soroban_storage_update_state (store : Term /* Store */) : MIRSetup ()= do {
+   mir_ghost_value soroban_storage_state.ghoststate store;
+};
+
+/*
+ * Check if the a store has a given key. The key can be any value
+ * type. Returns a Cryptol Bool.
+ */
+let soroban_store_has (store : Term /* Store */) (k : Term) =
+   let k_to_raw = soroban_value_to_raw (type k) in
+   {{ Store::has store (k_to_raw k) }};
+
+/*
+ * Get the contents in a store under a given key, as type tv.
+ * The key can be any value type.
+ *
+ * Returns a Term with Cryptol type Option::T (Option::T tv).
+ * If the outer Option is None, there was no such key in the store.
+ * If the inner Option is None, the value found was not the expected type.
+ *
+ * (This is apparently the same interface as the SDK Rust code.)
+ */
+let soroban_store_get (store : Term /* Store */) (k : Term) (tv : Type) =
+   let k_to_raw = soroban_value_to_raw (type k) in
+   let v_from_raw = soroban_value_from_raw tv in
+   {{ Option::fmap (Store::get store (k_to_raw k)) v_from_raw }};
+
+/*
+ * Set the contents in a store under a given key. The key and value
+ * can be any value type.
+ *
+ * Returns a new Cryptol Store value.
+ */
+let soroban_store_set (store : Term /* Store */) (k : Term) (v : Term) =
+   let k_to_raw = soroban_value_to_raw (type k) in
+   let v_to_raw = soroban_value_to_raw (type v) in
+   {{ Store::set store (k_to_raw k) (v_to_raw v) }};
 
 
 ////////////////////////////////////////////////////////////
@@ -439,35 +489,11 @@ soroban_init <- do {
 
     let smi = make_soroban_mir_items mod features;
 
-    /*
-     * Spec for the storage interface.
-     *
-     * For now at least the Cryptol-level store is written
-     * purely in terms of Values::Raw::T and the type wrapping happens
-     * here. It's possible that should change, but we'll see.
-     */
     let spec_storage = {
-
-      state = \store -> do {
-        mir_ghost_value soroban_storage_state.ghoststate store;
-      },
-
-      has = \store k ->
-        let k_to_raw = soroban_value_to_raw (type k) in
-        {{ Store::has store (k_to_raw k) }},
-
-      get = \store k tv ->
-        let k_to_raw = soroban_value_to_raw (type k) in
-        let v_from_raw = soroban_value_from_raw tv in
-        {{ Option::fmap
-            (Store::get store (k_to_raw k))
-            v_from_raw }},
-
-      set = \store k v ->
-        let k_to_raw = soroban_value_to_raw (type k) in
-        let v_to_raw = soroban_value_to_raw (type v) in
-        {{ Store::set store (k_to_raw k) (v_to_raw v) }}
-
+       state = soroban_storage_update_state,
+       has = soroban_store_has,
+       get = soroban_store_get,
+       set = soroban_store_set
     };
 
     /*

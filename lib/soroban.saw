@@ -85,82 +85,82 @@ typedef SorobanAPI = {
 ////////////////////////////////////////////////////////////
 // SDK value interface
 
-    /*
-     * Hook for dynamic type dispatch on the value types.
-     */
-    let type_eq (t1 : Type) (t2 : Type) : Bool =
-      let s1 = show t1 in
-      let s2 = show t2 in
-      eval_bool {{ Util::lenPolyEq s1 s2 }};
+/*
+ * Hook for dynamic type dispatch on the value types.
+ */
+let type_eq (t1 : Type) (t2 : Type) : Bool =
+   let s1 = show t1 in
+   let s2 = show t2 in
+   eval_bool {{ Util::lenPolyEq s1 s2 }};
 
-    /*
-     * Check if a value of a value type is actually a valid value of
-     * that type. In theory, we shouldn't ever attach types to invalid
-     * values; we shouldn't ever construct any and potentially-garbage
-     * values from outside should appear first as Values::Raw and get
-     * checked before being converted to a specific value type.
-     *
-     * However, the Soroban SDK rust code plays fast and loose with
-     * unsafe casts and we want to interoperate with it as much as
-     * possible.
-     *
-     * valid : (t : Type) -> t -> Bit
-     */
-    let valid (t : Type) : Term =
-      if type_eq t {| Values::VoidT |} then
-        {{ Values::void_valid }}
-      else if type_eq t {| Values::BoolT |} then
-        {{ Values::bool_valid }}
-      else if type_eq t {| Values::U32T |} then
-        {{ Values::u32_valid }}
-      else if type_eq t {| Values::SymbolT |} then
-        {{ Values::symbol_valid }}
-      else if type_eq t {| Values::RawT |} then
-        {{ Values::raw_valid }}
-      else if type_eq t {| Store::T |} then
-        // XXX: this gets passed here, but shouldn't be. ignore it
-        // (this logic is for value types!)
-        {{ \_ -> True }}
-      else
-        run (fail (str_concat (show t) " has no validity predicate"));
+/*
+ * Check if a value of a value type is actually a valid value of
+ * that type. In theory, we shouldn't ever attach types to invalid
+ * values; we shouldn't ever construct any and potentially-garbage
+ * values from outside should appear first as Values::Raw and get
+ * checked before being converted to a specific value type.
+ *
+ * However, the Soroban SDK rust code plays fast and loose with
+ * unsafe casts and we want to interoperate with it as much as
+ * possible.
+ *
+ * valid : (t : Type) -> t -> Bit
+ */
+let valid (t : Type) : Term =
+   if type_eq t {| Values::VoidT |} then
+      {{ Values::void_valid }}
+   else if type_eq t {| Values::BoolT |} then
+      {{ Values::bool_valid }}
+   else if type_eq t {| Values::U32T |} then
+      {{ Values::u32_valid }}
+   else if type_eq t {| Values::SymbolT |} then
+      {{ Values::symbol_valid }}
+   else if type_eq t {| Values::RawT |} then
+      {{ Values::raw_valid }}
+   else if type_eq t {| Store::T |} then
+      // XXX: this gets passed here, but shouldn't be. ignore it
+      // (this logic is for value types!)
+      {{ \_ -> True }}
+   else
+      run (fail (str_concat (show t) " has no validity predicate"));
 
-    /*
-     * Convert from a specific value type to Values::Raw::T
-     *
-     * to_raw : (t : Type) -> t -> Values::Raw::T
-     */
-    let to_raw (t : Type) : Term =
-      if type_eq t {| Values::VoidT |} then
-        {{ Values::void_to_raw }}
-      else if type_eq t {| Values::BoolT |} then
-        {{ Values::bool_to_raw }}
-      else if type_eq t {| Values::U32T |} then
-        {{ Values::u32_to_raw }}
-      else if type_eq t {| Values::SymbolT |} then
-        {{ Values::symbol_to_raw }}
-      else
-        run (fail (str_concat (show t) " cannot be converted to Raw"));
+/*
+ * Convert from a specific value type to Values::Raw::T
+ *
+ * to_raw : (t : Type) -> t -> Values::Raw::T
+ */
+let to_raw (t : Type) : Term =
+   if type_eq t {| Values::VoidT |} then
+      {{ Values::void_to_raw }}
+   else if type_eq t {| Values::BoolT |} then
+      {{ Values::bool_to_raw }}
+   else if type_eq t {| Values::U32T |} then
+      {{ Values::u32_to_raw }}
+   else if type_eq t {| Values::SymbolT |} then
+      {{ Values::symbol_to_raw }}
+   else
+      run (fail (str_concat (show t) " cannot be converted to Raw"));
 
-    /*
-     * Convert from a Values::Raw::T to a specific value type
-     * (type is passed as the first argument)
-     *
-     * Returns None if the raw value is not actually a value
-     * of the right type. Crashes if the type is wrong.
-     *
-     * from_raw : (t : Type) -> Values::Raw::T -> Option t
-     */
-    let from_raw (t : Type) : Term =
-      if type_eq t {| Values::VoidT |} then
-        {{ Values::void_from_raw }}
-      else if type_eq t {| Values::BoolT |} then
-        {{ Values::bool_from_raw }}
-      else if type_eq t {| Values::U32T |} then
-        {{ Values::u32_from_raw }}
-      else if type_eq t {| Values::SymbolT |} then
-        {{ Values::symbol_from_raw }}
-      else
-        run (fail (str_concat (show t) " cannot be converted from Raw"));
+/*
+ * Convert from a Values::Raw::T to a specific value type
+ * (type is passed as the first argument)
+ *
+ * Returns None if the raw value is not actually a value
+ * of the right type. Crashes if the type is wrong.
+ *
+ * from_raw : (t : Type) -> Values::Raw::T -> Option t
+ */
+let from_raw (t : Type) : Term =
+   if type_eq t {| Values::VoidT |} then
+      {{ Values::void_from_raw }}
+   else if type_eq t {| Values::BoolT |} then
+      {{ Values::bool_from_raw }}
+   else if type_eq t {| Values::U32T |} then
+      {{ Values::u32_from_raw }}
+   else if type_eq t {| Values::SymbolT |} then
+      {{ Values::symbol_from_raw }}
+   else
+      run (fail (str_concat (show t) " cannot be converted from Raw"));
 
 
 ////////////////////////////////////////////////////////////

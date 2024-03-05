@@ -32,7 +32,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
   s.storage.state store;
 
   // Execute the function with an instance of Env
-  mir_execute_func [s.mir_value.Env ()];
+  mir_execute_func [s.mir_value.EnvVal ()];
 
   // Compute updated count
   let ncount' = {{ ncount + 1 }};

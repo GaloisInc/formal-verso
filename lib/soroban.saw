@@ -19,28 +19,28 @@ Store <- cryptol_load "Store.cry";
  * Symbols extracted from the MIR
  */
 typedef SorobanAdt = {
-  // from the soroban_env_guest crate
-  Guest : (() -> MIRAdt),
+   // from the soroban_env_guest crate
+   GuestType : (() -> MIRAdt),
 
-  // from the soroban_sdk crate
-  Env : (() -> MIRAdt),
-  MaybeEnv : (() -> MIRAdt),
-  Storage : (() -> MIRAdt),
-  Symbol : (() -> MIRAdt),
+   // from the soroban_sdk crate
+   EnvType : (() -> MIRAdt),
+   MaybeEnvType : (() -> MIRAdt),
+   StorageType : (() -> MIRAdt),
+   SymbolType : (() -> MIRAdt),
 
-  // from the soroban_env_common crate
-  Bool_ : (() -> MIRAdt),
-  U32Val : (() -> MIRAdt),
-  RawVal : (() -> MIRAdt),
-  SymbolVal : (() -> MIRAdt),
-  Void : (() -> MIRAdt)
+   // from the soroban_env_common crate
+   BoolType : (() -> MIRAdt),
+   U32ValType : (() -> MIRAdt),
+   RawValType : (() -> MIRAdt),
+   SymbolValType : (() -> MIRAdt),
+   VoidType : (() -> MIRAdt)
 };
 
 typedef MirValues = {
-    Guest : (() -> MIRValue),
-    Env : (() -> MIRValue),
-    MaybeEnv : (() -> MIRValue),
-    Storage : (() -> MIRValue)
+   GuestVal : (() -> MIRValue),
+   EnvVal : (() -> MIRValue),
+   MaybeEnvVal : (() -> MIRValue),
+   StorageVal : (() -> MIRValue)
 };
 
 
@@ -269,29 +269,29 @@ soroban_init <- do {
        */
       {
         // from the soroban_env_guest crate
-        Guest = find
+        GuestType = find
           "soroban_env_guest::guest::Guest",
 
         // from the soroban_sdk crate
-        Env = find
+        EnvType = find
           "soroban_sdk::env::Env",
-        MaybeEnv = find_when "maybe_env"
+        MaybeEnvType = find_when "maybe_env"
           "soroban_sdk::env::MaybeEnv",
-        Storage = find_when "storage"
+        StorageType = find_when "storage"
           "soroban_sdk::storage::Storage",
-        Symbol = find_when "symbol"
+        SymbolType = find_when "symbol"
           "soroban_sdk::symbol::Symbol",
 
         // from the soroban_env_common crate
-        Bool_ = find_when "bool_val"
+        BoolType = find_when "bool_val"
           "soroban_env_common::raw_val::Bool",
-        U32Val = find_when "u32_val"
+        U32ValType = find_when "u32_val"
           "soroban_env_common::num::U32Val",
-        RawVal = find
+        RawValType = find
           "soroban_env_common::raw_val::RawVal",
-        SymbolVal = find_when "symbol"
+        SymbolValType = find_when "symbol"
           "soroban_env_common::symbol::Symbol",
-        Void = find_when "void_val"
+        VoidType = find_when "void_val"
           "soroban_env_common::raw_val::Void"
       };
 
@@ -300,18 +300,18 @@ soroban_init <- do {
      */
     let mir_value =
       let mir_value_Guest () =
-        mir_struct_value (soroban_adt.Guest ()) [] in
+        mir_struct_value (soroban_adt.GuestType ()) [] in
       let mir_value_Env () =
-        mir_struct_value (soroban_adt.Env ()) [mir_value_Guest ()] in
+        mir_struct_value (soroban_adt.EnvType ()) [mir_value_Guest ()] in
       let mir_value_MaybeEnv () =
-        mir_struct_value (soroban_adt.MaybeEnv ()) [mir_value_Guest ()] in
+        mir_struct_value (soroban_adt.MaybeEnvType ()) [mir_value_Guest ()] in
       let mir_value_Storage () =
-        mir_struct_value (soroban_adt.Storage ()) [mir_value_Env ()] in
+        mir_struct_value (soroban_adt.StorageType ()) [mir_value_Env ()] in
       {
-        Guest = mir_value_Guest,
-        Env = mir_value_Env,
-        MaybeEnv = mir_value_MaybeEnv,
-        Storage = mir_value_Storage
+        GuestVal = mir_value_Guest,
+        EnvVal = mir_value_Env,
+        MaybeEnvVal = mir_value_MaybeEnv,
+        StorageVal = mir_value_Storage
       };
 
     /*
@@ -360,26 +360,26 @@ soroban_init <- do {
     rec to_mir_value x =
       let t = type x in
       if type_eq t {| Values::VoidT |} then
-        mir_struct_value (soroban_adt.Void ()) [
+        mir_struct_value (soroban_adt.VoidType ()) [
           to_mir_value {{ Values::void_to_raw x }}
         ]
       else if type_eq t {| Values::BoolT |} then
-        mir_struct_value (soroban_adt.Bool_ ()) [
+        mir_struct_value (soroban_adt.BoolType ()) [
           to_mir_value {{ Values::bool_to_raw x }}
         ]
       else if type_eq t {| Values::U32T |} then
-        mir_struct_value (soroban_adt.U32Val ()) [
+        mir_struct_value (soroban_adt.U32ValType ()) [
           to_mir_value {{ Values::u32_to_raw x }}
         ]
       else if type_eq t {| Values::SymbolT |} then
-        mir_struct_value (soroban_adt.Symbol ()) [
-          mir_value.MaybeEnv (),
-          mir_struct_value (soroban_adt.SymbolVal ()) [
+        mir_struct_value (soroban_adt.SymbolType ()) [
+          mir_value.MaybeEnvVal (),
+          mir_struct_value (soroban_adt.SymbolValType ()) [
             to_mir_value {{ Values::symbol_to_raw x }}
           ]
         ]
       else if type_eq t {| Values::RawT |} then
-        mir_struct_value (soroban_adt.RawVal ()) [
+        mir_struct_value (soroban_adt.RawValType ()) [
           // XXX: can't do this, it makes SAW unable to match specs
           //mir_term {{ Values::raw_get_payload x }}
           mir_term {{ x.bits }}
@@ -404,15 +404,15 @@ soroban_init <- do {
      */
     let to_mir_type t =
       if type_eq t {| Values::VoidT |} then
-        mir_adt (soroban_adt.Void ())
+        mir_adt (soroban_adt.VoidType ())
       else if type_eq t {| Values::BoolT |} then
-        mir_adt (soroban_adt.Bool_ ())
+        mir_adt (soroban_adt.BoolType ())
       else if type_eq t {| Values::U32T |} then
         mir_u32
       else if type_eq t {| Values::SymbolT |} then
-        mir_adt (soroban_adt.Symbol ())
+        mir_adt (soroban_adt.SymbolType ())
       else if type_eq t {| Values::RawT |} then
-        mir_adt (soroban_adt.RawVal ())
+        mir_adt (soroban_adt.RawValType ())
       else
         run (fail (str_concat (show t) " cannot be converted to MIRType"));
 
@@ -502,8 +502,8 @@ soroban_init <- do {
 
             store <- mir_fresh_cryptol_var "storage.has.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (soroban_adt.Env ()));
-            mir_points_to self (s.mir_value.Env ());
+            self <- mir_alloc (mir_adt (soroban_adt.EnvType ()));
+            mir_points_to self (s.mir_value.EnvVal ());
 
             k <- s.fresh "storage.has.k" {| Values::RawT |};
 
@@ -522,8 +522,8 @@ soroban_init <- do {
 
             store <- mir_fresh_cryptol_var "storage.get.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (soroban_adt.Env ()));
-            mir_points_to self (s.mir_value.Env ());
+            self <- mir_alloc (mir_adt (soroban_adt.EnvType ()));
+            mir_points_to self (s.mir_value.EnvVal ());
 
             k <- s.fresh "storage.get.k" {| Values::RawT |};
 
@@ -543,8 +543,8 @@ soroban_init <- do {
 
             store <- mir_fresh_cryptol_var "storage.put.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (soroban_adt.Env ()));
-            mir_points_to self (s.mir_value.Env ());
+            self <- mir_alloc (mir_adt (soroban_adt.EnvType ()));
+            mir_points_to self (s.mir_value.EnvVal ());
 
             k <- s.fresh "storage.put.k" {| Values::RawT |};
             v <- s.fresh "storage.put.v" {| Values::RawT |};

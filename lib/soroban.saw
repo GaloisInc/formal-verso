@@ -484,6 +484,9 @@ let storage_get_spec (smi : SorobanMIRItems) = do {
 
    k <- soroban_value_fresh "storage.get.k" {| Values::RawT |};
 
+   // XXX is it really wrong to call get without first calling has?
+   // seems unusual, and also inconsistent with the return type of
+   // get.
    mir_precond {{ Store::has store k }};
    soroban_storage_update_state store;
 
@@ -491,6 +494,9 @@ let storage_get_spec (smi : SorobanMIRItems) = do {
 
    soroban_storage_update_state store;
 
+   // XXX probably relatedly, this doesn't seem to be able to
+   // return failure. But, this seems like it will do the wrong
+   // thing if the type in the store is wrong...
    return_ok smi {{ (Store::get store k).value }};
 };
 
@@ -516,12 +522,13 @@ let storage_put_spec (smi : SorobanMIRItems) = do {
 
    soroban_storage_update_state {{ Store::set store k v }};
 
+   // Return the SDK void value.
    return_ok smi {{ Values::unit }};
 };
 
 /*
- * Construct the "overrides" (checked or admitted SAW theorems)
- * for the SDK interfaces.
+ * Construct the "overrides" (checked or admitted SAW theorems, in
+ * this case admitted) for the SDK storage interface.
  */
 let make_storage_overrides (smi : SorobanMIRItems) mod features = do {
    if string_list.elem "storage" features then do {

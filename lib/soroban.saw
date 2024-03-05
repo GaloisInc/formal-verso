@@ -18,14 +18,18 @@ Store <- cryptol_load "Store.cry";
 /*
  * Symbols extracted from the MIR
  */
-typedef SorobanAdt = {
+typedef SorobanMIRItems = {
    // from the soroban_env_guest crate
    GuestType : (() -> MIRAdt),
+   GuestVal : (() -> MIRValue),
 
    // from the soroban_sdk crate
    EnvType : (() -> MIRAdt),
+   EnvVal : (() -> MIRValue),
    MaybeEnvType : (() -> MIRAdt),
+   MaybeEnvVal : (() -> MIRValue),
    StorageType : (() -> MIRAdt),
+   StorageVal : (() -> MIRValue),
    SymbolType : (() -> MIRAdt),
 
    // from the soroban_env_common crate
@@ -34,13 +38,6 @@ typedef SorobanAdt = {
    RawValType : (() -> MIRAdt),
    SymbolValType : (() -> MIRAdt),
    VoidType : (() -> MIRAdt)
-};
-
-typedef MirValues = {
-   GuestVal : (() -> MIRValue),
-   EnvVal : (() -> MIRValue),
-   MaybeEnvVal : (() -> MIRValue),
-   StorageVal : (() -> MIRValue)
 };
 
 
@@ -60,7 +57,7 @@ typedef SorobanSpecAPI = {
 
   fresh : (String -> Type -> MIRSetup Term),
 
-  mir_value : MirValues,
+  mir_value : SorobanMIRItems,
   to_mir_value : (Term -> MIRValue),
   to_mir_type : (Type -> MIRType)
 
@@ -85,7 +82,7 @@ typedef SorobanVerifyArgs = {
  *    - assume wrapper function
  */
 typedef SorobanAPI = {
-  adt : SorobanAdt,
+  adt : SorobanMIRItems,
   spec : (String -> (SorobanSpecAPI -> MIRSetup ()) -> MIRSetup ()),
   verify : (SorobanVerifyArgs -> TopLevel MIRSpec),
   assume : (SorobanVerifyArgs -> TopLevel MIRSpec)
@@ -247,7 +244,7 @@ soroban_init <- do {
       ("symbol", "maybe_env")
     ];
 
-    let soroban_adt : SorobanAdt =
+    let soroban_adt : SorobanMIRItems =
       /*
        * Tools for looking up stuff in the MIR.
        */
@@ -284,14 +281,27 @@ soroban_init <- do {
       let SymbolValType = find_when "symbol" "soroban_env_common::symbol::Symbol" in
       let VoidType = find_when "void_val" "soroban_env_common::raw_val::Void" in
 
+      let GuestVal () =
+        mir_struct_value (GuestType ()) [] in
+      let EnvVal () =
+        mir_struct_value (EnvType ()) [GuestVal ()] in
+      let MaybeEnvVal () =
+        mir_struct_value (MaybeEnvType ()) [GuestVal ()] in
+      let StorageVal () =
+        mir_struct_value (StorageType ()) [EnvVal ()] in
+
       {
         // from the soroban_env_guest crate
         GuestType = GuestType,
+        GuestVal = GuestVal,
 
         // from the soroban_sdk crate
         EnvType = EnvType,
+        EnvVal = EnvVal,
         MaybeEnvType = MaybeEnvType,
+        MaybeEnvVal = MaybeEnvVal,
         StorageType = StorageType,
+        StorageVal = StorageVal,
         SymbolType = SymbolType,
 
         // from the soroban_env_common crate
@@ -303,23 +313,9 @@ soroban_init <- do {
       };
 
     /*
-     * Bind mir_values for things.
+     * XXX this should be removed
      */
-    let mir_value =
-      let GuestVal () =
-        mir_struct_value (soroban_adt.GuestType ()) [] in
-      let EnvVal () =
-        mir_struct_value (soroban_adt.EnvType ()) [GuestVal ()] in
-      let MaybeEnvVal () =
-        mir_struct_value (soroban_adt.MaybeEnvType ()) [GuestVal ()] in
-      let StorageVal () =
-        mir_struct_value (soroban_adt.StorageType ()) [EnvVal ()] in
-      {
-        GuestVal = GuestVal,
-        EnvVal = EnvVal,
-        MaybeEnvVal = MaybeEnvVal,
-        StorageVal = StorageVal
-      };
+    let mir_value = soroban_adt;
 
     /*
      * Convert a value of a value type (recall the value types are

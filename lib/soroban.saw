@@ -573,25 +573,28 @@ soroban_init <- do {
     let smi = make_soroban_mir_items mod features;
 
     let sdk_assume feat name spec =
-      if string_list.elem feat features then
-        list.sequence [mir_unsafe_assume_spec mod name spec]
-      else
-        return [];
+        mir_unsafe_assume_spec mod name spec;
 
     /*
      * Construct the "overrides" (checked or admitted SAW theorems)
      * for the SDK interfaces.
      */
-    has_spec <-
-        sdk_assume "storage" "soroban_sdk::env::{impl#12}::has_contract_data"
-          (storage_has_spec smi);
-    get_spec <-
-        sdk_assume "storage" "soroban_sdk::env::{impl#12}::get_contract_data"
-          (storage_get_spec smi);
-    put_spec <-
-        sdk_assume "storage" "soroban_sdk::env::{impl#12}::put_contract_data"
-          (storage_put_spec smi);
-    let sdk_overrides = list.concats [has_spec, get_spec, put_spec];
+    sdk_overrides <- do {
+       if string_list.elem "storage" features then do {
+          has_spec <-
+              sdk_assume "storage" "soroban_sdk::env::{impl#12}::has_contract_data"
+                (storage_has_spec smi);
+          get_spec <-
+              sdk_assume "storage" "soroban_sdk::env::{impl#12}::get_contract_data"
+                (storage_get_spec smi);
+          put_spec <-
+              sdk_assume "storage" "soroban_sdk::env::{impl#12}::put_contract_data"
+                (storage_put_spec smi);
+          return [has_spec, get_spec, put_spec];
+       }
+       else
+          return [];
+    };
 
     /*
      * Hook for running verification

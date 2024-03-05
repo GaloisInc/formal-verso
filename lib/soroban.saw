@@ -165,7 +165,7 @@ typedef SorobanVerifyArgs = {
  *    - assume wrapper function
  */
 typedef SorobanAPI = {
-  adt : SorobanMIRItems,
+  smi : SorobanMIRItems,
   spec : (String -> (SorobanSpecAPI -> MIRSetup ()) -> MIRSetup ()),
   verify : (SorobanVerifyArgs -> TopLevel MIRSpec),
   assume : (SorobanVerifyArgs -> TopLevel MIRSpec)
@@ -327,13 +327,13 @@ soroban_init <- do {
       ("symbol", "maybe_env")
     ];
 
-    let soroban_adt : SorobanMIRItems = make_soroban_mir_items mod features;
+    let smi = make_soroban_mir_items mod features;
 
 
     /*
      * XXX this should be removed
      */
-    let mir_value = soroban_adt;
+    let mir_value = smi;
 
     /*
      * Convert a value of a value type (recall the value types are
@@ -381,26 +381,26 @@ soroban_init <- do {
     rec to_mir_value x =
       let t = type x in
       if type_eq t {| Values::VoidT |} then
-        mir_struct_value (soroban_adt.VoidType ()) [
+        mir_struct_value (smi.VoidType ()) [
           to_mir_value {{ Values::void_to_raw x }}
         ]
       else if type_eq t {| Values::BoolT |} then
-        mir_struct_value (soroban_adt.BoolType ()) [
+        mir_struct_value (smi.BoolType ()) [
           to_mir_value {{ Values::bool_to_raw x }}
         ]
       else if type_eq t {| Values::U32T |} then
-        mir_struct_value (soroban_adt.U32ValType ()) [
+        mir_struct_value (smi.U32ValType ()) [
           to_mir_value {{ Values::u32_to_raw x }}
         ]
       else if type_eq t {| Values::SymbolT |} then
-        mir_struct_value (soroban_adt.SymbolType ()) [
+        mir_struct_value (smi.SymbolType ()) [
           mir_value.MaybeEnvVal (),
-          mir_struct_value (soroban_adt.SymbolValType ()) [
+          mir_struct_value (smi.SymbolValType ()) [
             to_mir_value {{ Values::symbol_to_raw x }}
           ]
         ]
       else if type_eq t {| Values::RawT |} then
-        mir_struct_value (soroban_adt.RawValType ()) [
+        mir_struct_value (smi.RawValType ()) [
           // XXX: can't do this, it makes SAW unable to match specs
           //mir_term {{ Values::raw_get_payload x }}
           mir_term {{ x.bits }}
@@ -425,15 +425,15 @@ soroban_init <- do {
      */
     let to_mir_type t =
       if type_eq t {| Values::VoidT |} then
-        mir_adt (soroban_adt.VoidType ())
+        mir_adt (smi.VoidType ())
       else if type_eq t {| Values::BoolT |} then
-        mir_adt (soroban_adt.BoolType ())
+        mir_adt (smi.BoolType ())
       else if type_eq t {| Values::U32T |} then
         mir_u32
       else if type_eq t {| Values::SymbolT |} then
-        mir_adt (soroban_adt.SymbolType ())
+        mir_adt (smi.SymbolType ())
       else if type_eq t {| Values::RawT |} then
-        mir_adt (soroban_adt.RawValType ())
+        mir_adt (smi.RawValType ())
       else
         run (fail (str_concat (show t) " cannot be converted to MIRType"));
 
@@ -507,7 +507,7 @@ soroban_init <- do {
       let return_ok (x : Term) : MIRSetup () =
         mir_return
           (mir_enum_value
-            (soroban_adt.ResultInfallibleType (to_mir_type (type x)))
+            (smi.ResultInfallibleType (to_mir_type (type x)))
             "Ok"
             [to_mir_value x])
       in
@@ -519,7 +519,7 @@ soroban_init <- do {
 
             store <- mir_fresh_cryptol_var "storage.has.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (soroban_adt.EnvType ()));
+            self <- mir_alloc (mir_adt (smi.EnvType ()));
             mir_points_to self (s.mir_value.EnvVal ());
 
             k <- s.fresh "storage.has.k" {| Values::RawT |};
@@ -539,7 +539,7 @@ soroban_init <- do {
 
             store <- mir_fresh_cryptol_var "storage.get.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (soroban_adt.EnvType ()));
+            self <- mir_alloc (mir_adt (smi.EnvType ()));
             mir_points_to self (s.mir_value.EnvVal ());
 
             k <- s.fresh "storage.get.k" {| Values::RawT |};
@@ -560,7 +560,7 @@ soroban_init <- do {
 
             store <- mir_fresh_cryptol_var "storage.put.store" {| Store::T |};
 
-            self <- mir_alloc (mir_adt (soroban_adt.EnvType ()));
+            self <- mir_alloc (mir_adt (smi.EnvType ()));
             mir_points_to self (s.mir_value.EnvVal ());
 
             k <- s.fresh "storage.put.k" {| Values::RawT |};
@@ -595,7 +595,7 @@ soroban_init <- do {
       mir_unsafe_assume_spec mod args.fun args.spec;
 
     return {
-      adt = soroban_adt,
+      smi = smi,
       spec = soroban_spec,
       verify = soroban_verify,
       assume = soroban_assume

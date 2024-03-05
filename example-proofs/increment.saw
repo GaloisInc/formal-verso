@@ -38,8 +38,8 @@ let increment_spec = do {
   let ncount' = {{ ncount + 1 }};
   let count' = {{ Values::u32_from_native ncount' }};
 
-  // Check that final storage state is initial store updated to count' at
-  // COUNTER
+  // The final storage state should be the initial store updated to
+  // count' at COUNTER.
   soroban_storage_update_state (soroban_store_set store COUNTER count');
 
   // Check that count' is returned

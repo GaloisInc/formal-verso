@@ -78,9 +78,8 @@ sqrt_ov <- soroban.verify {
 
 // Declare specification for sqrt_cached function
 let sqrt_cached_spec = soroban.spec "sqrt_cached" (\(s : SorobanSpecAPI) -> do {
-  // Declare a fresh symbolic Store
-  // XXX: s.fresh is for values... should make a different hook for this
-  store <- s.fresh "store" {| Store::T |};
+  // Declare a fresh symbolic store
+  store <- mir_fresh_cryptol_var "store" {| Store::T |};
 
   // Declare a fresh variable for the argument
   x <- mir_fresh_cryptol_var "x" {| [32] |};

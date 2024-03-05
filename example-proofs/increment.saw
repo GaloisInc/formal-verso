@@ -19,8 +19,8 @@ let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
 // Declare specification for increment function
 let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
 
-  // Declare a fresh symbolic Store
-  store <- s.fresh "store" {| Store::T |};
+  // Declare a fresh symbolic store
+  store <- mir_fresh_cryptol_var "store" {| Store::T |};
 
   // Get value in the store at COUNTER as a Values::U32::T
   let counter_val = s.storage.get store COUNTER {| Values::U32T |};

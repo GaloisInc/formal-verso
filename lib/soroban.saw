@@ -494,7 +494,7 @@ soroban_init <- do {
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::has_contract_data"
           (\(s : SorobanSpecAPI) -> do {
 
-            store <- s.fresh "store" {| Store::T |};
+            store <- mir_fresh_cryptol_var "storage.has.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (soroban_adt.Env ()));
             mir_points_to self (s.mir_value.Env ());
@@ -514,7 +514,7 @@ soroban_init <- do {
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::get_contract_data"
           (\(s : SorobanSpecAPI) -> do {
 
-            store <- s.fresh "store" {| Store::T |};
+            store <- mir_fresh_cryptol_var "storage.get.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (soroban_adt.Env ()));
             mir_points_to self (s.mir_value.Env ());
@@ -535,7 +535,7 @@ soroban_init <- do {
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::put_contract_data"
           (\(s : SorobanSpecAPI) -> do {
 
-            store <- s.fresh "store" {| Store::T |};
+            store <- mir_fresh_cryptol_var "storage.put.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (soroban_adt.Env ()));
             mir_points_to self (s.mir_value.Env ());

@@ -13,7 +13,7 @@ soroban <- soroban_init mod ["storage", "symbol", "u32_val"];
 let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
 
 // Declare specification for increment function
-let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
+let increment_spec = do {
 
   // Declare a fresh symbolic store
   store <- mir_fresh_cryptol_var "store" {| Store::T |};
@@ -45,7 +45,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
   // Check that count' is returned
   mir_return (mir_term ncount');
 
-});
+};
 
 // Run the verification
 soroban.verify {

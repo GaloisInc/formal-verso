@@ -10,7 +10,7 @@ mod <- mir_load_module "../extra-examples/sqrt/target/linked-mir.json";
 soroban <- soroban_init mod ["u32_val", "storage"];
 
 // Declare specification for log2 function
-let log2_spec = soroban.spec "log2" (\(s : SorobanSpecAPI) -> do {
+let log2_spec = do {
   // Declare a fresh symbolic [32]
   x <- mir_fresh_cryptol_var "x" {| [32] |};
 
@@ -25,7 +25,7 @@ let log2_spec = soroban.spec "log2" (\(s : SorobanSpecAPI) -> do {
     where y = lg2 x
   }};
   mir_return (mir_term correct);
-});
+};
 
 // Verify log2, and obtain an override for it
 log2_ov <- soroban.verify {
@@ -53,14 +53,14 @@ let {{
 prove_print w4 {{ \x y1 y2 -> isSqrt x y1 /\ isSqrt x y2 ==> y1 == y2 }};
 
 // Declare specification for sqrt function
-let sqrt_spec = soroban.spec "sqrt" (\(s : SorobanSpecAPI) -> do {
+let sqrt_spec = do {
   x <- mir_fresh_cryptol_var "x" {| [32] |};
   mir_execute_func [mir_term x];
   // Check that the function returns a (the) value which satisfies isSqrt x
   y <- mir_fresh_cryptol_var "y" {| [32] |};
   mir_postcond {{ isSqrt x y }};
   mir_return (mir_term y);
-});
+};
 
 // Verify sqrt, using the log2 override
 // Warning: will take a while! Run with solver caching on
@@ -73,7 +73,7 @@ sqrt_ov <- soroban.verify {
 };
 
 // Declare specification for sqrt_cached function
-let sqrt_cached_spec = soroban.spec "sqrt_cached" (\(s : SorobanSpecAPI) -> do {
+let sqrt_cached_spec = do {
   // Declare a fresh symbolic store
   store <- mir_fresh_cryptol_var "store" {| Store::T |};
 
@@ -110,7 +110,7 @@ let sqrt_cached_spec = soroban.spec "sqrt_cached" (\(s : SorobanSpecAPI) -> do {
   // which corresponds to u32) not yval (of type Values::U32::T which
   // corresponds to U32Val)
   mir_return (mir_term y);
-});
+};
 
 // Verify sqrt_cached, using the sqrt override
 // Warning: will take a while! Run with solver caching on

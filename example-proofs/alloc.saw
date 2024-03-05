@@ -12,7 +12,7 @@ soroban <- soroban_init mod [];
 // Declare parameterized specification for sum function
 // SAW does not support unbounded loops, so we parameterize the spec by a SAW
 // Int which can be used as a Cryptol type-level natural number
-let sum_spec count = soroban.spec "sum" (\(s : SorobanSpecAPI) -> do {
+let sum_spec count = do {
 
   // Execute the function with an instance of Env and the fixed count
   mir_execute_func [soroban.smi.EnvVal (), mir_term {{ `count : [32] }}];
@@ -20,7 +20,7 @@ let sum_spec count = soroban.spec "sum" (\(s : SorobanSpecAPI) -> do {
   // Check that the result is sum of 0 up to (but not including) count
   mir_return (mir_term {{ sum [0..<count] : [32] }});
 
-});
+};
 
 // Verify sum for count = 0 through 10
 for (list.range 0 10) (\count -> do {

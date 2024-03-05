@@ -127,19 +127,6 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
 ////////////////////////////////////////////////////////////
 // interfacing types
 
-typedef SorobanSpecAPI = {
-
-  storage : {
-    state : (Term /* Store */ -> MIRSetup ()),
-    has : (Term /* Store */ -> Term /* k */ -> Term /* Bit */),
-    get : (Term /* Store */ ->
-      Term /* k */ -> Type /* = v */ -> Term /* Option (Option v) */),
-    set : (Term /* Store */ ->
-      Term /* k */ -> Term /* v */ -> Term /* Store */)
-  }
-
-};
-
 /*
  * Args passed to verify
  */
@@ -160,7 +147,6 @@ typedef SorobanVerifyArgs = {
  */
 typedef SorobanAPI = {
   smi : SorobanMIRItems,
-  spec : (String -> (SorobanSpecAPI -> MIRSetup ()) -> MIRSetup ()),
   verify : (SorobanVerifyArgs -> TopLevel MIRSpec),
   assume : (SorobanVerifyArgs -> TopLevel MIRSpec)
 };
@@ -489,30 +475,9 @@ soroban_init <- do {
 
     let smi = make_soroban_mir_items mod features;
 
-    let spec_storage = {
-       state = soroban_storage_update_state,
-       has = soroban_store_has,
-       get = soroban_store_get,
-       set = soroban_store_set
-    };
-
-    /*
-     * Wrapper for contract specs.
-     */
-    let soroban_spec spec_name spec = do {
-
-      let (api : SorobanSpecAPI) = {
-
-        storage = spec_storage
-      };
-
-      spec api;
-
-    };
-
     let sdk_assume feat name spec =
       if string_list.elem feat features then
-        list.sequence [mir_unsafe_assume_spec mod name (soroban_spec name spec)]
+        list.sequence [mir_unsafe_assume_spec mod name spec]
       else
         return [];
 
@@ -605,13 +570,13 @@ soroban_init <- do {
       list.sequence [
 
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::has_contract_data"
-          (\(s : SorobanSpecAPI) -> storage_has_spec),
+          storage_has_spec,
 
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::get_contract_data"
-          (\(s : SorobanSpecAPI) -> storage_get_spec),
+          storage_get_spec,
 
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::put_contract_data"
-          (\(s : SorobanSpecAPI) -> storage_put_spec)
+          storage_put_spec
 
       ];
     let sdk_overrides = list.concats sdk_overridess;
@@ -633,7 +598,6 @@ soroban_init <- do {
 
     return {
       smi = smi,
-      spec = soroban_spec,
       verify = soroban_verify,
       assume = soroban_assume
     };

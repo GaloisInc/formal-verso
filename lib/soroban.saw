@@ -451,13 +451,19 @@ let soroban_store_set (store : Term /* Store */) (k : Term) (v : Term) =
    let v_to_raw = soroban_value_to_raw (type v) in
    {{ Store::set store (k_to_raw k) (v_to_raw v) }};
 
+/*
+ * Specs for the SDK code.
+ */
+
+/*
+ * Helper for returning Ok from a Rust function.
+ */
 let return_ok (smi : SorobanMIRItems) (x : Term) : MIRSetup () =
    mir_return
       (mir_enum_value
          (smi.ResultInfallibleType (soroban_value_type_to_mir smi (type x)))
          "Ok"
-         [soroban_value_to_mir smi x])
-;
+         [soroban_value_to_mir smi x]);
 
 /*
  * Spec for has_contract_data()
@@ -477,9 +483,7 @@ let storage_has_spec (smi : SorobanMIRItems) = do {
    soroban_storage_update_state store;
 
    return_ok smi {{ Values::bool_from_native (Store::has store k) }};
-
-}
-;
+};
 
 /*
  * Spec for get_contract_data()
@@ -500,9 +504,7 @@ let storage_get_spec (smi : SorobanMIRItems) = do {
    soroban_storage_update_state store;
 
    return_ok smi {{ (Store::get store k).value }};
-
-}
-;
+};
 
 /*
  * Spec for put_contract_data
@@ -527,9 +529,7 @@ let storage_put_spec (smi : SorobanMIRItems) = do {
    soroban_storage_update_state {{ Store::set store k v }};
 
    return_ok smi {{ Values::unit }};
-
-}
-;
+};
 
 
 ////////////////////////////////////////////////////////////

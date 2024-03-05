@@ -37,11 +37,11 @@ typedef SorobanMIRItems = {
    SymbolType : (() -> MIRAdt),
 
    // from the soroban_env_common crate
+   VoidType : (() -> MIRAdt),
    BoolType : (() -> MIRAdt),
    U32ValType : (() -> MIRAdt),
-   RawValType : (() -> MIRAdt),
    SymbolValType : (() -> MIRAdt),
-   VoidType : (() -> MIRAdt)
+   RawValType : (() -> MIRAdt)
 };
 
 let make_soroban_mir_items mod features : SorobanMIRItems =
@@ -85,11 +85,11 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
    let SymbolType = find_adt_when "symbol" "soroban_sdk::symbol::Symbol" in
 
    // from the soroban_env_common crate
+   let VoidType = find_adt_when "void_val" "soroban_env_common::raw_val::Void" in
    let BoolType = find_adt_when "bool_val" "soroban_env_common::raw_val::Bool" in
    let U32ValType = find_adt_when "u32_val" "soroban_env_common::num::U32Val" in
-   let RawValType = find_adt "soroban_env_common::raw_val::RawVal" in
    let SymbolValType = find_adt_when "symbol" "soroban_env_common::symbol::Symbol" in
-   let VoidType = find_adt_when "void_val" "soroban_env_common::raw_val::Void" in
+   let RawValType = find_adt "soroban_env_common::raw_val::RawVal" in
 
    {
       InfallibleType = InfallibleType,
@@ -109,11 +109,11 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
       SymbolType = SymbolType,
 
       // from the soroban_env_common crate
+      VoidType = VoidType,
       BoolType = BoolType,
       U32ValType = U32ValType,
-      RawValType = RawValType,
       SymbolValType = SymbolValType,
-      VoidType = VoidType
+      RawValType = RawValType
    };
 
 

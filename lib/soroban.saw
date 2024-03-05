@@ -329,6 +329,35 @@ soroban_init <- do {
     let smi = make_soroban_mir_items mod features;
 
     /*
+     * Extract the MIR-level type for type T.
+     *
+     * This function is the type-level version of to_mir_value, and
+     * uses the same types as returned by to_native.
+     *
+     * XXX: except that's wrong... and we maybe need name reform,
+     * because there's _three_ types for any given Soroban value:
+     *    - the Rust type, which is something out of the MIR;
+     *    - the Cryptol type, which matches the structure of the MIR type;
+     *    - the native SAW and/or Cryptol representation of the value;
+     *
+     * and I think we're playing fast and loose with the distinction
+     * between the last two, which is bad.
+     */
+    let to_mir_type t =
+      if type_eq t {| Values::VoidT |} then
+        mir_adt (smi.VoidType ())
+      else if type_eq t {| Values::BoolT |} then
+        mir_adt (smi.BoolType ())
+      else if type_eq t {| Values::U32T |} then
+        mir_u32
+      else if type_eq t {| Values::SymbolT |} then
+        mir_adt (smi.SymbolType ())
+      else if type_eq t {| Values::RawT |} then
+        mir_adt (smi.RawValType ())
+      else
+        run (fail (str_concat (show t) " cannot be converted to MIRType"));
+
+    /*
      * Convert a value of a value type (recall the value types are
      * Cryptol types and have Cryptol values) to a mir_term.
      *
@@ -400,35 +429,6 @@ soroban_init <- do {
         ]
       else
         run (fail (str_concat (show t) " cannot be converted to a MIR value"));
-
-    /*
-     * Extract the MIR-level type for type T.
-     *
-     * This function is the type-level version of to_mir_value, and
-     * uses the same types as returned by to_native.
-     *
-     * XXX: except that's wrong... and we maybe need name reform,
-     * because there's _three_ types for any given Soroban value:
-     *    - the Rust type, which is something out of the MIR;
-     *    - the Cryptol type, which matches the structure of the MIR type;
-     *    - the native SAW and/or Cryptol representation of the value;
-     *
-     * and I think we're playing fast and loose with the distinction
-     * between the last two, which is bad.
-     */
-    let to_mir_type t =
-      if type_eq t {| Values::VoidT |} then
-        mir_adt (smi.VoidType ())
-      else if type_eq t {| Values::BoolT |} then
-        mir_adt (smi.BoolType ())
-      else if type_eq t {| Values::U32T |} then
-        mir_u32
-      else if type_eq t {| Values::SymbolT |} then
-        mir_adt (smi.SymbolType ())
-      else if type_eq t {| Values::RawT |} then
-        mir_adt (smi.RawValType ())
-      else
-        run (fail (str_concat (show t) " cannot be converted to MIRType"));
 
     /*
      * Spec for the storage interface.

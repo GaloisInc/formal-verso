@@ -492,25 +492,13 @@ soroban_init <- do {
 
     let smi = make_soroban_mir_items mod features;
 
-    let sdk_assume feat name spec =
-      if string_list.elem feat features then
-        list.sequence [mir_unsafe_assume_spec mod name spec]
-      else
-        return [];
-
-    /*
-     * Construct the "overrides" (checked or admitted SAW theorems)
-     * for the SDK interfaces.
-     */
-    sdk_overridess <-
-
       let return_ok (x : Term) : MIRSetup () =
         mir_return
           (mir_enum_value
             (smi.ResultInfallibleType (soroban_value_type_to_mir smi (type x)))
             "Ok"
             [soroban_value_to_mir smi x])
-      in
+      ;
 
       /*
        * Spec for has_contract_data()
@@ -532,7 +520,7 @@ soroban_init <- do {
             return_ok {{ Values::bool_from_native (Store::has store k) }};
 
           }
-      in
+      ;
 
       /*
        * Spec for get_contract_data()
@@ -555,7 +543,7 @@ soroban_init <- do {
             return_ok {{ (Store::get store k).value }};
 
           }
-      in
+      ;
 
       /*
        * Spec for put_contract_data
@@ -582,7 +570,19 @@ soroban_init <- do {
             return_ok {{ Values::unit }};
 
           }
-      in
+      ;
+
+    let sdk_assume feat name spec =
+      if string_list.elem feat features then
+        list.sequence [mir_unsafe_assume_spec mod name spec]
+      else
+        return [];
+
+    /*
+     * Construct the "overrides" (checked or admitted SAW theorems)
+     * for the SDK interfaces.
+     */
+    sdk_overridess <-
 
       list.sequence [
 

@@ -19,6 +19,10 @@ Store <- cryptol_load "Store.cry";
  * Symbols extracted from the MIR
  */
 typedef SorobanMIRItems = {
+   // non-soroban
+   InfallibleType : (() -> MIRAdt),
+   ResultInfallibleType : (MIRType -> MIRAdt),
+
    // from the soroban_env_guest crate
    GuestType : (() -> MIRAdt),
    GuestVal : (() -> MIRValue),
@@ -265,6 +269,12 @@ soroban_init <- do {
        * Bind handles for various SDK types.
        */
 
+      // non-soroban
+      let InfallibleType = find "core::convert::Infallible" in
+      let ResultInfallibleType (t : MIRType) =
+         mir_find_adt mod "core::result::Result" [t, mir_adt (InfallibleType ())]
+      in
+
       // from the soroban_env_guest crate
       let GuestType = find "soroban_env_guest::guest::Guest" in
 
@@ -291,6 +301,9 @@ soroban_init <- do {
         mir_struct_value (StorageType ()) [EnvVal ()] in
 
       {
+         InfallibleType = InfallibleType,
+         ResultInfallibleType = ResultInfallibleType,
+
         // from the soroban_env_guest crate
         GuestType = GuestType,
         GuestVal = GuestVal,
@@ -486,14 +499,10 @@ soroban_init <- do {
      */
     sdk_overridess <-
 
-      let adt_Infallible = mir_find_adt mod "core::convert::Infallible" [] in
-      let adt_ResultInfallible (t : MIRType) =
-        mir_find_adt mod "core::result::Result" [t, mir_adt adt_Infallible] in
-
       let return_ok (x : Term) : MIRSetup () =
         mir_return
           (mir_enum_value
-            (adt_ResultInfallible (to_mir_type (type x)))
+            (soroban_adt.ResultInfallibleType (to_mir_type (type x)))
             "Ok"
             [to_mir_value x])
       in

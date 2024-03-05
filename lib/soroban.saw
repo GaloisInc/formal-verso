@@ -577,28 +577,14 @@ let soroban_assume (soroban: SorobanAPI) (args : SorobanVerifyArgs) =
 /*
  * Function to initialize the stuff in here.
  *
- * Arguments are:
- *    mod : MirModule
- *    features : [String]
- *
  * mod is the results of mir_load_module on the linked_mir.json file
  * containing the stuff we're trying to verify.
  *
  * The features list is a list of arbitrary strings naming things the
  * rust code is using; it prevents us from looking for MIR symbols
- * that don't exist.
+ * that don't exist. FUTURE: it should be a list of an enum type...
  */
-soroban_init <- do {
-
-  // XXX this is redundant and should be removed
-  Util <- cryptol_load "Util.cry";
-
-  /*
-   * I'm not sure what this layer of indirection buys us.
-   */
-
-  let soroban_init (mod : MIRModule) (features : [String])
-  : TopLevel SorobanAPI = do {
+let soroban_init (mod : MIRModule) (features : [String]) : TopLevel SorobanAPI = do {
 
     let feat_implies feats (x, y) =
       if string_list.elem x feats then concat [y] feats else feats;
@@ -618,9 +604,4 @@ soroban_init <- do {
       smi = smi,
       sdk_overrides = storage_overrides
     };
-
-  };
-
-  return soroban_init;
-
 };

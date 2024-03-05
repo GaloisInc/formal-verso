@@ -140,13 +140,16 @@ typedef SorobanVerifyArgs = {
 
 /*
  * Material returned by the init function for use by the actual specs:
+ *    - the MIR module
  *    - references to MIR symbols from the SDK
- *    - spec wrapper function
+ *    - overrides list
  *    - verify wrapper function
  *    - assume wrapper function
  */
 typedef SorobanAPI = {
+  mod : MIRModule,
   smi : SorobanMIRItems,
+  sdk_overrides : [MIRSpec],
   verify : (SorobanVerifyArgs -> TopLevel MIRSpec),
   assume : (SorobanVerifyArgs -> TopLevel MIRSpec)
 };
@@ -592,13 +595,14 @@ soroban_init <- do {
     ];
 
     let smi = make_soroban_mir_items mod features;
-    sdk_overrides <- make_storage_overrides smi mod features;
+
+    storage_overrides <- make_storage_overrides smi mod features;
 
     /*
      * Hook for running verification
      */
     let soroban_verify (args : SorobanVerifyArgs) =
-      mir_verify mod args.fun (concat sdk_overrides args.overrides)
+      mir_verify mod args.fun (concat storage_overrides args.overrides)
         args.path_sat args.spec args.proof;
 
     /*
@@ -610,7 +614,9 @@ soroban_init <- do {
       mir_unsafe_assume_spec mod args.fun args.spec;
 
     return {
+      mod = mod,
       smi = smi,
+      sdk_overrides = storage_overrides,
       verify = soroban_verify,
       assume = soroban_assume
     };

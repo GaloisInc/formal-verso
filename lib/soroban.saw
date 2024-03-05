@@ -582,21 +582,16 @@ soroban_init <- do {
      * Construct the "overrides" (checked or admitted SAW theorems)
      * for the SDK interfaces.
      */
-    sdk_overridess <-
-
-      list.sequence [
-
+    has_spec <-
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::has_contract_data"
-          (storage_has_spec smi),
-
+          (storage_has_spec smi);
+    get_spec <-
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::get_contract_data"
-          (storage_get_spec smi),
-
+          (storage_get_spec smi);
+    put_spec <-
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::put_contract_data"
-          (storage_put_spec smi)
-
-      ];
-    let sdk_overrides = list.concats sdk_overridess;
+          (storage_put_spec smi);
+    let sdk_overrides = list.concats [has_spec, get_spec, put_spec];
 
     /*
      * Hook for running verification

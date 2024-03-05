@@ -19,7 +19,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
   store <- mir_fresh_cryptol_var "store" {| Store::T |};
 
   // Get value in the store at COUNTER as a Values::U32::T
-  let counter_val = s.storage.get store COUNTER {| Values::U32T |};
+  let counter_val = soroban_store_get store COUNTER {| Values::U32T |};
   // Assume that the conversion is successful, or that there was no
   // value set
   count <- option.unwrap {{ Option::unwrap_or counter_val (Option::ok Values::u32_zero) }};
@@ -29,7 +29,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
   mir_precond {{ ncount < 1000 }};
 
   // Set store as the initial storage state
-  s.storage.state store;
+  soroban_storage_update_state store;
 
   // Execute the function with an instance of Env
   mir_execute_func [soroban.smi.EnvVal ()];
@@ -40,7 +40,7 @@ let increment_spec = soroban.spec "increment" (\(s : SorobanSpecAPI) -> do {
 
   // Check that final storage state is initial store updated to count' at
   // COUNTER
-  s.storage.state (s.storage.set store COUNTER count');
+  soroban_storage_update_state (soroban_store_set store COUNTER count');
 
   // Check that count' is returned
   mir_return (mir_term ncount');

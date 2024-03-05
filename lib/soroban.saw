@@ -542,11 +542,11 @@ soroban_init <- do {
 
             k <- soroban_value_fresh "storage.has.k" {| Values::RawT |};
 
-            s.storage.state store;
+            soroban_storage_update_state store;
 
             mir_execute_func [self, soroban_value_to_mir smi k];
 
-            s.storage.state store;
+            soroban_storage_update_state store;
 
             return_ok {{ Values::bool_from_native (Store::has store k) }};
 
@@ -563,11 +563,11 @@ soroban_init <- do {
             k <- soroban_value_fresh "storage.get.k" {| Values::RawT |};
 
             mir_precond {{ Store::has store k }};
-            s.storage.state store;
+            soroban_storage_update_state store;
 
             mir_execute_func [self, soroban_value_to_mir smi k];
 
-            s.storage.state store;
+            soroban_storage_update_state store;
 
             return_ok {{ (Store::get store k).value }};
 
@@ -584,13 +584,13 @@ soroban_init <- do {
             k <- soroban_value_fresh "storage.put.k" {| Values::RawT |};
             v <- soroban_value_fresh "storage.put.v" {| Values::RawT |};
 
-            s.storage.state store;
+            soroban_storage_update_state store;
 
             let k_val = soroban_value_to_mir smi k;
             let v_val = soroban_value_to_mir smi v;
             mir_execute_func [self, k_val, v_val];
 
-            s.storage.state {{ Store::set store k v }};
+            soroban_storage_update_state {{ Store::set store k v }};
 
             return_ok {{ Values::unit }};
 

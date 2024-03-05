@@ -262,19 +262,9 @@ let soroban_value_from_raw (t : Type) : Term =
       run (fail (str_concat (show t) " cannot be converted from Raw"));
 
 /*
- * Extract the MIR-level type for type T.
+ * Extract the MIR-level type for type T. Value types only.
  *
- * This function is the type-level version of to_mir_value, and
- * uses the same types as returned by to_native.
- *
- * XXX: except that's wrong... and we maybe need name reform,
- * because there's _three_ types for any given Soroban value:
- *    - the Rust type, which is something out of the MIR;
- *    - the Cryptol type, which matches the structure of the MIR type;
- *    - the native SAW and/or Cryptol representation of the value;
- *
- * and I think we're playing fast and loose with the distinction
- * between the last two, which is bad.
+ * This function is the type-level version of soroban_value_to_mir.
  */
 let soroban_value_type_to_mir (smi : SorobanMIRItems) t =
    if type_eq t {| Values::VoidT |} then
@@ -370,9 +360,31 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
 /*
  * Spec for the storage interface.
  *
- * For now at least the Cryptol-level store is written
- * purely in terms of Values::Raw::T and the type wrapping happens
- * here. It's possible that should change, but we'll see.
+ * To (maybe) improve clarity we refer to the moving parts of the
+ * storage interface as follows:
+ *    - "storage" is the name of the overall interface and concept
+ *    - "store" is the name of the data structure we use to model the contents
+ *
+ * There are three parts to the code:
+ *    - a Cryptol implementation of the store
+ *      (which, XXX, is called Storage and should be renamed)
+ *    - a SAW wrapper around the Cryptol
+ *    - SAW specs for the Rust interface
+ *
+ * Note that currently the model version of the code (the Cryptol and
+ * the SAW wrapper) requires that contract specs explicitly update the
+ * storage state after manipulating the store, but the Rust interface
+ * specs (necessarily) do this internally. This is on the one hand
+ * similar, but it also means that contract specs have to do extra
+ * work/operations that have no equivalent in their Rust code and I'm
+ * not sure that's a good way to do things. That is, I'm suggesting
+ * that the SAW store ops below that just manipulate store values
+ * should be extended to storage ops that update the state and thus
+ * apply to the whole storage model. This wants some thought.
+ *
+ * For now at least the Cryptol-level store is written purely in terms
+ * of Values::Raw::T and the type wrapping happens here. It's possible
+ * that should change, but we'll see.
  */
 
 /*
@@ -399,6 +411,11 @@ soroban_storage_state <- do {
 let soroban_storage_update_state (store : Term /* Store */) : MIRSetup ()= do {
    mir_ghost_value soroban_storage_state.ghoststate store;
 };
+
+/*
+ * Ops on store values. These are basically type wrappers around
+ * the Cryptol version of the Store.
+ */
 
 /*
  * Check if the a store has a given key. The key can be any value

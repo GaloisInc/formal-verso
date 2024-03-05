@@ -136,12 +136,7 @@ typedef SorobanSpecAPI = {
       Term /* k */ -> Type /* = v */ -> Term /* Option (Option v) */),
     set : (Term /* Store */ ->
       Term /* k */ -> Term /* v */ -> Term /* Store */)
-  },
-
-  fresh : (String -> Type -> MIRSetup Term),
-
-  to_mir_value : (Term -> MIRValue),
-  to_mir_type : (Type -> MIRType)
+  }
 
 };
 
@@ -468,16 +463,7 @@ soroban_init <- do {
 
       let (api : SorobanSpecAPI) = {
 
-        storage = spec_storage,
-
-        /*
-         * Generate a fresh var of the requested value type.
-         */
-        fresh = soroban_value_fresh,
-
-        to_mir_value = soroban_value_to_mir smi,
-        to_mir_type = soroban_value_type_to_mir smi
-
+        storage = spec_storage
       };
 
       spec api;
@@ -514,7 +500,7 @@ soroban_init <- do {
             self <- mir_alloc (mir_adt (smi.EnvType ()));
             mir_points_to self (smi.EnvVal ());
 
-            k <- s.fresh "storage.has.k" {| Values::RawT |};
+            k <- soroban_value_fresh "storage.has.k" {| Values::RawT |};
 
             s.storage.state store;
 
@@ -534,7 +520,7 @@ soroban_init <- do {
             self <- mir_alloc (mir_adt (smi.EnvType ()));
             mir_points_to self (smi.EnvVal ());
 
-            k <- s.fresh "storage.get.k" {| Values::RawT |};
+            k <- soroban_value_fresh "storage.get.k" {| Values::RawT |};
 
             mir_precond {{ Store::has store k }};
             s.storage.state store;
@@ -555,8 +541,8 @@ soroban_init <- do {
             self <- mir_alloc (mir_adt (smi.EnvType ()));
             mir_points_to self (smi.EnvVal ());
 
-            k <- s.fresh "storage.put.k" {| Values::RawT |};
-            v <- s.fresh "storage.put.v" {| Values::RawT |};
+            k <- soroban_value_fresh "storage.put.k" {| Values::RawT |};
+            v <- soroban_value_fresh "storage.put.v" {| Values::RawT |};
 
             s.storage.state store;
 

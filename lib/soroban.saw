@@ -139,12 +139,12 @@ let soroban_value_valid (t : Type) : Term =
  * of contortions to remember the name in a useful way.
  */
 let soroban_value_fresh (name : String) (t : Type) : MIRSetup Term = do {
-          //let name' = str_concats [spec_name, "::", name];
-          x <- mir_fresh_cryptol_var name t;
-          let t_valid = soroban_value_valid t;
-          mir_assert {{ t_valid x }};
-          return x;
-        };
+   //let name' = str_concats [spec_name, "::", name];
+   x <- mir_fresh_cryptol_var name t;
+   let t_valid = soroban_value_valid t;
+   mir_assert {{ t_valid x }};
+   return x;
+};
 
 /*
  * Convert from a specific value type to Values::Raw::T.

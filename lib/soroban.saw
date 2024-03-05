@@ -62,7 +62,14 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
    in
 
    /*
-    * Bind handles for various SDK types.
+    * Bind handles for various SDK types and values.
+    *
+    * These bindings are delayed so we don't crash looking for
+    * things that might not exist in the test MIR until something
+    * explicitly asks for them.
+    *
+    * XXX: seems like we don't need both the delay behavior and
+    * the features list. Simplify?
     */
 
    // non-soroban

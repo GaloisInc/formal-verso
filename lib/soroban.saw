@@ -125,33 +125,18 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
 
 
 ////////////////////////////////////////////////////////////
-// interfacing types
-
-/*
- * Args passed to verify
- */
-typedef SorobanVerifyArgs = {
-  fun : String,
-  overrides : [MIRSpec],
-  path_sat : Bool,
-  spec : MIRSetup (),
-  proof : ProofScript ()
-};
+// Top-level context
 
 /*
  * Material returned by the init function for use by the actual specs:
  *    - the MIR module
  *    - references to MIR symbols from the SDK
- *    - overrides list
- *    - verify wrapper function
- *    - assume wrapper function
+ *    - overrides list for functions from the SDK
  */
 typedef SorobanAPI = {
   mod : MIRModule,
   smi : SorobanMIRItems,
-  sdk_overrides : [MIRSpec],
-  verify : (SorobanVerifyArgs -> TopLevel MIRSpec),
-  assume : (SorobanVerifyArgs -> TopLevel MIRSpec)
+  sdk_overrides : [MIRSpec]
 };
 
 
@@ -557,6 +542,36 @@ let make_storage_overrides (smi : SorobanMIRItems) mod features = do {
 
 
 ////////////////////////////////////////////////////////////
+// verify
+
+/*
+ * Args passed to verify
+ */
+typedef SorobanVerifyArgs = {
+  fun : String,
+  overrides : [MIRSpec],
+  path_sat : Bool,
+  spec : MIRSetup (),
+  proof : ProofScript ()
+};
+
+/*
+ * Hook for running verification
+ */
+let soroban_verify (soroban: SorobanAPI) (args : SorobanVerifyArgs) =
+   mir_verify soroban.mod args.fun (concat soroban.sdk_overrides args.overrides)
+      args.path_sat args.spec args.proof;
+
+/*
+ * Hook for assuming a specification instead
+ * (intentionally has the same signature, even though some of it
+ * isn't used)
+ */
+let soroban_assume (soroban: SorobanAPI) (args : SorobanVerifyArgs) =
+   mir_unsafe_assume_spec soroban.mod args.fun args.spec;
+
+
+////////////////////////////////////////////////////////////
 // init
 
 /*
@@ -598,27 +613,10 @@ soroban_init <- do {
 
     storage_overrides <- make_storage_overrides smi mod features;
 
-    /*
-     * Hook for running verification
-     */
-    let soroban_verify (args : SorobanVerifyArgs) =
-      mir_verify mod args.fun (concat storage_overrides args.overrides)
-        args.path_sat args.spec args.proof;
-
-    /*
-     * Hook for assuming a specification instead
-     * (intentionally has the same signature, even though some of it
-     * isn't used)
-     */
-    let soroban_assume (args : SorobanVerifyArgs) =
-      mir_unsafe_assume_spec mod args.fun args.spec;
-
     return {
       mod = mod,
       smi = smi,
-      sdk_overrides = storage_overrides,
-      verify = soroban_verify,
-      assume = soroban_assume
+      sdk_overrides = storage_overrides
     };
 
   };

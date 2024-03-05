@@ -28,7 +28,7 @@ let log2_spec = do {
 };
 
 // Verify log2, and obtain an override for it
-log2_ov <- soroban.verify {
+log2_ov <- soroban_verify soroban {
   fun = "sqrt_contract::{impl#1}::log2",
   overrides = [],
   path_sat = true,
@@ -64,7 +64,7 @@ let sqrt_spec = do {
 
 // Verify sqrt, using the log2 override
 // Warning: will take a while! Run with solver caching on
-sqrt_ov <- soroban.verify {
+sqrt_ov <- soroban_verify soroban {
   fun = "sqrt_contract::{impl#1}::sqrt",
   overrides = [log2_ov],
   path_sat = true,
@@ -114,7 +114,7 @@ let sqrt_cached_spec = do {
 
 // Verify sqrt_cached, using the sqrt override
 // Warning: will take a while! Run with solver caching on
-soroban.verify {
+soroban_verify soroban {
   fun = "sqrt_contract::{impl#1}::sqrt_cached",
   overrides = [sqrt_ov],
   path_sat = true,

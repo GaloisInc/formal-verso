@@ -48,7 +48,7 @@ let increment_spec = do {
 };
 
 // Run the verification
-soroban.verify {
+soroban_verify soroban {
   // Name of function in MIR
   fun = "soroban_increment_contract::{impl#1}::increment",
   // Additional overrides

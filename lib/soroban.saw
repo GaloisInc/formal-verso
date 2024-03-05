@@ -490,9 +490,7 @@ soroban_init <- do {
       ("symbol", "maybe_env")
     ];
 
-    let smi = make_soroban_mir_items mod features;
-
-      let return_ok (x : Term) : MIRSetup () =
+      let return_ok (smi : SorobanMIRItems) (x : Term) : MIRSetup () =
         mir_return
           (mir_enum_value
             (smi.ResultInfallibleType (soroban_value_type_to_mir smi (type x)))
@@ -503,7 +501,7 @@ soroban_init <- do {
       /*
        * Spec for has_contract_data()
        */
-      let storage_has_spec = do {
+      let storage_has_spec (smi : SorobanMIRItems) = do {
             store <- mir_fresh_cryptol_var "storage.has.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (smi.EnvType ()));
@@ -517,7 +515,7 @@ soroban_init <- do {
 
             soroban_storage_update_state store;
 
-            return_ok {{ Values::bool_from_native (Store::has store k) }};
+            return_ok smi {{ Values::bool_from_native (Store::has store k) }};
 
           }
       ;
@@ -525,7 +523,7 @@ soroban_init <- do {
       /*
        * Spec for get_contract_data()
        */
-      let storage_get_spec = do {
+      let storage_get_spec (smi : SorobanMIRItems) = do {
             store <- mir_fresh_cryptol_var "storage.get.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (smi.EnvType ()));
@@ -540,7 +538,7 @@ soroban_init <- do {
 
             soroban_storage_update_state store;
 
-            return_ok {{ (Store::get store k).value }};
+            return_ok smi {{ (Store::get store k).value }};
 
           }
       ;
@@ -550,7 +548,7 @@ soroban_init <- do {
        *
        * XXX: why are we calling our internal things "set" when the SDK uses "put"?
        */
-      let storage_put_spec = do {
+      let storage_put_spec (smi : SorobanMIRItems) = do {
             store <- mir_fresh_cryptol_var "storage.put.store" {| Store::T |};
 
             self <- mir_alloc (mir_adt (smi.EnvType ()));
@@ -567,10 +565,12 @@ soroban_init <- do {
 
             soroban_storage_update_state {{ Store::set store k v }};
 
-            return_ok {{ Values::unit }};
+            return_ok smi {{ Values::unit }};
 
           }
       ;
+
+    let smi = make_soroban_mir_items mod features;
 
     let sdk_assume feat name spec =
       if string_list.elem feat features then
@@ -587,13 +587,13 @@ soroban_init <- do {
       list.sequence [
 
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::has_contract_data"
-          storage_has_spec,
+          (storage_has_spec smi),
 
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::get_contract_data"
-          storage_get_spec,
+          (storage_get_spec smi),
 
         sdk_assume "storage" "soroban_sdk::env::{impl#12}::put_contract_data"
-          storage_put_spec
+          (storage_put_spec smi)
 
       ];
     let sdk_overrides = list.concats sdk_overridess;

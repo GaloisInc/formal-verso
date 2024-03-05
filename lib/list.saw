@@ -12,6 +12,10 @@ typedef StringListAPI = {
 
 let list : ListAPI =
 
+  /*
+   * note: saw's "concat" is append (as in xs ++ ys), not what's
+   * usually called concat, which is this.
+   */
   rec concats (xss : [[a]]) : [a] =
     if null xss then
       []

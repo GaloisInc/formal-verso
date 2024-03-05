@@ -267,51 +267,58 @@ soroban_init <- do {
       /*
        * Bind handles for various SDK types.
        */
+
+      // from the soroban_env_guest crate
+      let GuestType = find "soroban_env_guest::guest::Guest" in
+
+      // from the soroban_sdk crate
+      let EnvType = find "soroban_sdk::env::Env" in
+      let MaybeEnvType = find_when "maybe_env" "soroban_sdk::env::MaybeEnv" in
+      let StorageType = find_when "storage" "soroban_sdk::storage::Storage" in
+      let SymbolType = find_when "symbol" "soroban_sdk::symbol::Symbol" in
+
+      // from the soroban_env_common crate
+      let BoolType = find_when "bool_val" "soroban_env_common::raw_val::Bool" in
+      let U32ValType = find_when "u32_val" "soroban_env_common::num::U32Val" in
+      let RawValType = find "soroban_env_common::raw_val::RawVal" in
+      let SymbolValType = find_when "symbol" "soroban_env_common::symbol::Symbol" in
+      let VoidType = find_when "void_val" "soroban_env_common::raw_val::Void" in
+
       {
         // from the soroban_env_guest crate
-        GuestType = find
-          "soroban_env_guest::guest::Guest",
+        GuestType = GuestType,
 
         // from the soroban_sdk crate
-        EnvType = find
-          "soroban_sdk::env::Env",
-        MaybeEnvType = find_when "maybe_env"
-          "soroban_sdk::env::MaybeEnv",
-        StorageType = find_when "storage"
-          "soroban_sdk::storage::Storage",
-        SymbolType = find_when "symbol"
-          "soroban_sdk::symbol::Symbol",
+        EnvType = EnvType,
+        MaybeEnvType = MaybeEnvType,
+        StorageType = StorageType,
+        SymbolType = SymbolType,
 
         // from the soroban_env_common crate
-        BoolType = find_when "bool_val"
-          "soroban_env_common::raw_val::Bool",
-        U32ValType = find_when "u32_val"
-          "soroban_env_common::num::U32Val",
-        RawValType = find
-          "soroban_env_common::raw_val::RawVal",
-        SymbolValType = find_when "symbol"
-          "soroban_env_common::symbol::Symbol",
-        VoidType = find_when "void_val"
-          "soroban_env_common::raw_val::Void"
+        BoolType = BoolType,
+        U32ValType = U32ValType,
+        RawValType = RawValType,
+        SymbolValType = SymbolValType,
+        VoidType = VoidType
       };
 
     /*
      * Bind mir_values for things.
      */
     let mir_value =
-      let mir_value_Guest () =
+      let GuestVal () =
         mir_struct_value (soroban_adt.GuestType ()) [] in
-      let mir_value_Env () =
-        mir_struct_value (soroban_adt.EnvType ()) [mir_value_Guest ()] in
-      let mir_value_MaybeEnv () =
-        mir_struct_value (soroban_adt.MaybeEnvType ()) [mir_value_Guest ()] in
-      let mir_value_Storage () =
-        mir_struct_value (soroban_adt.StorageType ()) [mir_value_Env ()] in
+      let EnvVal () =
+        mir_struct_value (soroban_adt.EnvType ()) [GuestVal ()] in
+      let MaybeEnvVal () =
+        mir_struct_value (soroban_adt.MaybeEnvType ()) [GuestVal ()] in
+      let StorageVal () =
+        mir_struct_value (soroban_adt.StorageType ()) [EnvVal ()] in
       {
-        GuestVal = mir_value_Guest,
-        EnvVal = mir_value_Env,
-        MaybeEnvVal = mir_value_MaybeEnv,
-        StorageVal = mir_value_Storage
+        GuestVal = GuestVal,
+        EnvVal = EnvVal,
+        MaybeEnvVal = MaybeEnvVal,
+        StorageVal = StorageVal
       };
 
     /*

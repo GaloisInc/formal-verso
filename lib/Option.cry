@@ -49,6 +49,9 @@ mk valid value = { is_ok = valid, value = value }
 is_ok : {a} Option a -> Bit
 is_ok o = o.is_ok
 
+is_some : {a} Option a -> Bit
+is_some o = o.is_ok
+
 unsafe_unwrap : {a} Option a -> a
 unsafe_unwrap o = o.value
 

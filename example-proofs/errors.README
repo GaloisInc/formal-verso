@@ -1,0 +1,26 @@
+The four versions here are as follows:
+
+errors.saw
+   - has three specs covering different portions of the parameter
+     space and the different possible results;
+
+errors2.saw
+   - a version written in terms of a SAW-script-level symbolic if,
+     which doesn't work because no such thing is available;
+
+errors3.saw
+   - a version using mir_mux_values;
+
+errors4.saw
+   - another version using mir_mux_values, with more logic pushed into
+     the Cryptol blocks but with an ugliness where an unwrap that
+     depends on a precondition is computed before the precondition
+     involved is asserted.
+
+In the long run we probably want to keep either errors3.saw or
+errors4.saw, and adjust it to be tidier based on saw features that
+become available and/or improved infrastructure. There's no real
+reason to keep errors.saw once one of the other ones works, and
+for the moment at least errors2.saw is probably not pushing in the
+right direction.
+

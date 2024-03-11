@@ -355,7 +355,6 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
  *
  * There are three parts to the code:
  *    - a Cryptol implementation of the store
- *      (which, XXX, is called Storage and should be renamed)
  *    - a SAW wrapper around the Cryptol
  *    - SAW specs for the Rust interface
  *

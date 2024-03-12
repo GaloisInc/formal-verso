@@ -698,6 +698,7 @@ symbol_from_raw = Symbol::from_raw
 symbol_to_raw = Symbol::to_raw
 symbol_from_native = Symbol::from_native
 //symbol_to_native = Symbol::to_native
+symbol_is_small = Symbol::is_small
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

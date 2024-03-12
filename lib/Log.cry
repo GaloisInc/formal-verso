@@ -1,0 +1,17 @@
+module Log where
+
+import Option as Option
+import Values as Values
+import submodule Values::Raw as Raw
+
+type T = Log
+
+/*
+ * In this version we just count the log messages
+ */
+
+private
+  newtype Log = { count : Integer }
+
+add : Log -> Log
+add ll = Log { count = ll.count + 1 }

@@ -10,6 +10,7 @@ Util <- cryptol_load "Util.cry";
 Option <- cryptol_load "Option.cry";
 Values <- cryptol_load "Values.cry";
 Store <- cryptol_load "Store.cry";
+Log <- cryptol_load "Log.cry";
 
 
 ////////////////////////////////////////////////////////////
@@ -541,6 +542,112 @@ let make_storage_overrides (smi : SorobanMIRItems) mod features = do {
          "soroban_sdk::env::{impl#12}::put_contract_data"
          (storage_put_spec smi);
       return [has_spec, get_spec, put_spec];
+   }
+   else
+      return [];
+};
+
+
+////////////////////////////////////////////////////////////
+// SDK logging interface
+
+/*
+ * Spec for the logging interface.
+ *
+ * Similarly to the storage interface, we name things as follows:
+ *    - "logging" is the name of the over all interface and concept
+ *    - "log" is the name of the data structure we use to model the contents
+ *
+ * There are three parts to this code:
+ *    - a Cryptol model of the log
+ *    - ghost state and glue for handling the model in SAW
+ *    - SAW specs for the Rust interface
+ *
+ * For the time being we model the log just by counting the number of
+ * messages logged.
+ */
+
+typedef SorobanLoggingState = {
+   ghoststate : Ghost
+};
+
+soroban_logging_state <- do {
+   ghoststate <- declare_ghost_state "Soroban::logging";
+   let state = {
+      ghoststate = ghoststate
+   };
+   return state;
+};
+
+/*
+ * Assert equality of the internally tracked model of the log contents
+ * with a new Log.
+ */
+let soroban_logging_assert_state (log : Term /* Log */) : MIRSetup () = do {
+   mir_ghost_value soroban_logging_state.ghoststate log;
+};
+
+/*
+ * We don't need to provide SAW-level ops on logs because the
+ * Cryptol-level ops are sufficient.
+ */
+
+/*
+ * Specs for the SDK code.
+ *
+ * Wrinkle: the main interface is a macro log! that takes an
+ * environment and arbitrarily many arguments and converts that to a
+ * call to Logs::add that takes the first string and then arbitrarily
+ * many more raw values.
+ *
+ * Also note that while there's two more calls "all" and "print" on
+ * that type, they're only available in test mode, which we don't
+ * handle. So for present purposes the log is write-only.
+ *
+ * Note: in the version of the SDK we're using, logs::Logs::add is called
+ * logging::Logger::log
+ */
+
+let logging_add_spec (smi : SorobanMIRItems) = do {
+   // get a fresh log and bind it to the log state
+   log <- mir_fresh_cryptol_var "logging.add.log" {| Log::T |};
+   soroban_logging_assert_state log;
+
+   // get a fresh environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get a fresh string
+   str <- mir_alloc mir_str;
+
+   // get a fresh args (which is actually a reference to an array)
+   // XXX it appears to be an array of any length? for now use a length
+   // of 1
+   let tyargs = mir_array 1 (mir_adt (smi.RawValType ()));
+   args_val <- mir_fresh_var "args_val" tyargs;
+   args <- mir_alloc tyargs;
+   mir_points_to args (mir_term args_val);
+
+   mir_execute_func [self, str, args];
+
+   // compute the proper updated log state
+   let log' = {{ Log::add log }};
+
+   // assert the updated log state
+   soroban_logging_assert_state log';
+};
+
+/*
+ * Construct the "overrides" (checked or admitted SAW theorems, in
+ * this case admitted) for the SDK storage interface.
+ */
+let make_logging_overrides (smi : SorobanMIRItems) mod features = do {
+   if string_list.elem "logging" features then do {
+      add_spec <- mir_unsafe_assume_spec mod
+         //"soroban_sdk::logs::{impl#1}::add"
+         "soroban_sdk::logging::{impl#1}::log"
+         (logging_add_spec smi);
+      return [add_spec];
    }
    else
       return [];

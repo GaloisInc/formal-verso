@@ -92,7 +92,7 @@ let sqrt_cached_spec = do {
   mir_precond {{ Option::ok_implies (Option::ok_and (\y -> isSqrt x (Values::u32_to_native y))) optopt_cached_val }};
 
   // Set store as the initial storage state
-  soroban_storage_update_state store;
+  soroban_storage_assert_state store;
 
   // Execute the function with an instance of Env and x
   mir_execute_func [soroban.smi.EnvVal (), mir_term x];
@@ -103,7 +103,7 @@ let sqrt_cached_spec = do {
   mir_postcond {{ isSqrt x y }};
 
   // Check that the final storage state is initial store updated to y at x
-  soroban_storage_update_state (soroban_store_set store xval yval);
+  soroban_storage_assert_state (soroban_store_set store xval yval);
 
   // Check that y is returned
   // note: the Rust code returns u32, not U32Val, so use y (of type [32]

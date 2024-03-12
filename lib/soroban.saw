@@ -392,10 +392,10 @@ soroban_storage_state <- do {
 };
 
 /*
- * Update the internally tracked model of the storage contents with a
- * new Store.
+ * Assert that the internally tracked model of the storage contents
+ * matches another Store.
  */
-let soroban_storage_update_state (store : Term /* Store */) : MIRSetup () = do {
+let soroban_storage_assert_state (store : Term /* Store */) : MIRSetup () = do {
    mir_ghost_value soroban_storage_state.ghoststate store;
 };
 
@@ -463,11 +463,11 @@ let storage_has_spec (smi : SorobanMIRItems) = do {
 
    k <- soroban_value_fresh "storage.has.k" {| Values::RawT |};
 
-   soroban_storage_update_state store;
+   soroban_storage_assert_state store;
 
    mir_execute_func [self, soroban_value_to_mir smi k];
 
-   soroban_storage_update_state store;
+   soroban_storage_assert_state store;
 
    return_ok smi {{ Values::bool_from_native (Store::has store k) }};
 };
@@ -487,11 +487,11 @@ let storage_get_spec (smi : SorobanMIRItems) = do {
    // seems unusual, and also inconsistent with the return type of
    // get.
    mir_precond {{ Store::has store k }};
-   soroban_storage_update_state store;
+   soroban_storage_assert_state store;
 
    mir_execute_func [self, soroban_value_to_mir smi k];
 
-   soroban_storage_update_state store;
+   soroban_storage_assert_state store;
 
    // XXX probably relatedly, this doesn't seem to be able to
    // return failure. But, this seems like it will do the wrong
@@ -513,13 +513,13 @@ let storage_put_spec (smi : SorobanMIRItems) = do {
    k <- soroban_value_fresh "storage.put.k" {| Values::RawT |};
    v <- soroban_value_fresh "storage.put.v" {| Values::RawT |};
 
-   soroban_storage_update_state store;
+   soroban_storage_assert_state store;
 
    let k_val = soroban_value_to_mir smi k;
    let v_val = soroban_value_to_mir smi v;
    mir_execute_func [self, k_val, v_val];
 
-   soroban_storage_update_state {{ Store::set store k v }};
+   soroban_storage_assert_state {{ Store::set store k v }};
 
    // Return the SDK void value.
    return_ok smi {{ Values::unit }};

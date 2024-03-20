@@ -38,6 +38,7 @@
 module Values where
 
 import Option as Option
+import HostValues as HostValues
 
 ////////////////////////////////////////////////////////////
 // fields
@@ -152,7 +153,7 @@ private
    //tag_bytesobject = 72 : Tag
    //tag_stringobject = 73 : Tag
    tag_symbolobject = 74 : Tag
-   //tag_vecobject = 75 : Tag
+   tag_vecobject = 75 : Tag
    tag_mapobject = 76 : Tag
    //tag_addressobject = 77 : Tag
 
@@ -281,6 +282,9 @@ private
 
    minor_of_val : Val -> [MINOR_BITS]
    minor_of_val v = drop ((v.bits >> MINOR_SHIFT) && MINOR_MASK)
+
+   rawraw_of_val : Val -> [WORD_BITS]
+   rawraw_of_val v = v.bits
 
 /*
  * Construction functions
@@ -651,7 +655,59 @@ submodule Symbol where
 // vecobject
 // val.rs line 330
 
-// TBD
+// Note that the rust code has an additional layer of type logic
+// around RawVal called Object that's shared by all the host-side
+// objects. We don't model that; we just use Raw.
+
+submodule VecObject where
+   newtype T = { val : Val }
+
+   valid' : Val -> Bool
+   valid' v = tag_of_val v == tag_vecobject /\ minor_of_val v == 0
+
+   valid : T -> Bool
+   valid vs = valid' vs.val
+
+   to_raw : T -> Val
+   to_raw vs = vs.val
+
+   from_raw : Val -> Option::T T
+   from_raw v =
+      if valid' v then Option::some (T { val = v })
+      else Option::none' (T { val = badval })
+
+   from_handle : [32] -> T
+   from_handle handle = T { val = val_of_major_minor_tag handle 0 tag_vecobject }
+
+   from_vecrep : HostValues::VecRepresentation -> HostValues::Heap -> (HostValues::Heap, T)
+   from_vecrep rep state = (state', from_handle handle)
+      where (state', handle) = HostValues::alloc_vec rep state
+
+   singleton: Val -> HostValues::Heap -> (HostValues::Heap, T)
+   singleton v state = from_vecrep rep state
+      where rep = HostValues::vec_representation_singleton (rawraw_of_val v)
+
+   empty: HostValues::Heap -> (HostValues::Heap, T)
+   empty state = from_vecrep rep state
+      where rep = HostValues::vec_representation_empty
+
+   pair: Val -> Val -> HostValues::Heap -> (HostValues::Heap, T)
+   pair v w state = from_vecrep rep state
+      where rep = HostValues::vec_representation_pair (rawraw_of_val v) (rawraw_of_val w)
+
+   triple: Val -> Val -> Val -> HostValues::Heap -> (HostValues::Heap, T)
+   triple v w x state = from_vecrep rep state
+      where rep = HostValues::vec_representation_triple (rawraw_of_val v) (rawraw_of_val w) (rawraw_of_val x)
+
+   quad: Val -> Val -> Val -> Val -> HostValues::Heap -> (HostValues::Heap, T)
+   quad v w x y state = from_vecrep rep state
+      where rep = HostValues::vec_representation_quad (rawraw_of_val v) (rawraw_of_val w) (rawraw_of_val x) (rawraw_of_val y)
+
+   /* this could use a better name, but what? */
+   n: [32] -> Val -> HostValues::Heap -> (HostValues::Heap, T)
+   n num v state = from_vecrep rep state
+      where rep = HostValues::vec_representation_n num (rawraw_of_val v)
+
 
 ////////////////////////////////////////////////////////////
 // mapobject
@@ -669,10 +725,14 @@ submodule Symbol where
 // workarounds for saw-script #1964
 // (cannot refer to cryptol submodule elements directly)
 
+/* re-export HostValues::Heap because we need it in soroban.saw */
+type HostHeap = HostValues::Heap
+
 type VoidT = Void::T
 type BoolT = Bool::T
 type U32T = U32::T
 type SymbolT = Symbol::T
+type VecObjectT = VecObject::T
 type RawT = Raw::T
 
 void_valid = Void::valid
@@ -699,6 +759,16 @@ symbol_to_raw = Symbol::to_raw
 symbol_from_native = Symbol::from_native
 //symbol_to_native = Symbol::to_native
 symbol_is_small = Symbol::is_small
+
+vecobject_valid = VecObject::valid
+vecobject_from_raw = VecObject::from_raw
+vecobject_to_raw = VecObject::to_raw
+vecobj_empty = VecObject::empty
+vecobj_singleton = VecObject::singleton
+vecobj_pair = VecObject::pair
+vecobj_triple = VecObject::triple
+vecobj_quad = VecObject::quad
+vecobj_n = VecObject::n
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

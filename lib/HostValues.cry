@@ -1,0 +1,240 @@
+/*
+ * Values stored on the host side.
+ *
+ * In the Soroban world these values are stored in the VM host and
+ * accessed/manipulated with hypercalls. The VM guest uses 32-bit
+ * object handles to refer to them.
+ *
+ * For modeling this, we need (a) a representation of the stored
+ * values and also (b) a table that maps object handles to them that
+ * we can use to get at these values directly.
+ *
+ * This file defines both.
+ *
+ * XXX: for the moment the representation here is rather ad hoc. In
+ * the long run it might be better to set it up to match the Soroban
+ * host code more closely so it can sometime maybe be used as a basis
+ * for verifying that code.
+ *
+ * Note: if we want to have this and the contract-facing values in
+ * separate files, only one can depend on the other. For the moment,
+ * the choice is that Values depends on HostValues.  It's definitely
+ * possible that this should get restructured once it's clearer what
+ * things actually look like after they get built out further. Obvious
+ * possibilities are:
+ *
+ * 1. Values depends on HostValues (current state). Advantages:
+ * natural relationship, doesn't mess up the abstraction layer in
+ * Values. Disadvantages: we can't refer to Values::Raw from here so
+ * the contents of vectors and maps have to be unwrapped, stored here
+ * as u64, and rewrapped inside Values, which is ugly.
+ *
+ * 2. HostValues depends on Values. Advantage: the use of integer
+ * handles when Values point to HostValues gives an obvious place to
+ * cut the circular dependency. The only thing Values need in them is
+ * a u32, and while it might be tidier to be able to call that a
+ * HostValues::Handle, that's not really necessary or critical. Then
+ * we can refer to raw values (Values::Raw::T) here for e.g. the
+ * contents of vectors and maps. Disadvantages: since HostValues is
+ * part of the implementation of Values, it should really be
+ * underneath it, and this way is backwards.  inversion mentioned
+ * above; Also, it means the nicely wrapped-up types in Values, which
+ * all have a regularized interface and so forth, can't themselves
+ * hide the host value lookups inside them. This messes up the
+ * abstractions. It'll be particularly messy for the types that can be
+ * either small (non-host) or large (host-stored) values, like U64 and
+ * Symbol.
+ *
+ * 3. Split Values::Raw to its own file. Advantages: the proper way to
+ * break the circular dependency, and eliminates the tradeoffs in
+ * options 1/2. Disadvantages: creates more things, and exposes many
+ * more internal elements.
+ *
+ * 4. Merge this file into Values. Advantages: eliminates all the other
+ * problems. Disadvantage: large and messy.
+ *
+ * TBD. Watch this space.
+ */
+module HostValues where
+
+import Array
+
+import Option as Option
+
+/*
+ * Interface types. We map Handle to HostVal (which may include values
+ * of type RawRawVal); the state of the mapping is called Heap because
+ * it's ultimately an allocation heap. These types are intended to be
+ * written qualified, as in HostValues::Handle and HostValues::T.
+ */
+type Handle = [32]
+type RawRawVal = [64]
+//type T = HostVal
+type Heap = HostHeap
+
+/*
+ * Vectors map 32-bit indexes to 64-bit unwrapped raw values.
+ * Values.cry rewraps those values as needed.
+ *
+ * XXX we should come up with some shorter names here
+ */
+newtype VecRepresentation = {
+   data: Array [32] RawRawVal,
+   size: [32]
+}
+
+/* Empty vector */
+vec_representation_empty : VecRepresentation
+vec_representation_empty = VecRepresentation { data = arrayConstant 0, size = 0 }
+
+/* Singleton vector */
+vec_representation_singleton : RawRawVal -> VecRepresentation
+vec_representation_singleton n = VecRepresentation { data = arrayConstant n, size = 1 }
+
+/* Pair */
+vec_representation_pair : RawRawVal -> RawRawVal -> VecRepresentation
+vec_representation_pair n m =
+   VecRepresentation { data = arr, size = 2 }
+   where arr = arrayUpdate (arrayConstant m) (0 : [32]) n
+
+/* Triple */
+vec_representation_triple : RawRawVal -> RawRawVal -> RawRawVal -> VecRepresentation
+vec_representation_triple n m o =
+   VecRepresentation { data = arr, size = 3 }
+   where arr = arrayUpdate (arrayUpdate (arrayConstant o) 0 n) 1 m
+
+/* Quad */
+vec_representation_quad : RawRawVal -> RawRawVal -> RawRawVal -> RawRawVal -> VecRepresentation
+vec_representation_quad n m o p =
+   VecRepresentation { data = arr, size = 4 }
+   where arr = arrayUpdate (arrayUpdate (arrayUpdate (arrayConstant p) 0 n) 1 m) 2 o
+
+/* N copies of V */
+vec_representation_n: [32] -> RawRawVal -> VecRepresentation
+vec_representation_n n v =
+   VecRepresentation { data = arr, size = n }
+   where arr = arrayConstant v
+
+/* Vector used when an invalid/error version is needed */
+invalid_vec_representation : VecRepresentation
+invalid_vec_representation = vec_representation_empty
+
+
+
+private
+   /*
+    * The supported types of host-side values are:
+    *    - 64-bit, 128-bit, and 256-bit signed and unsigned integers
+    *    - timepoints
+    *    - durations
+    *    - bytes (essentially arrays of u8)
+    *    - strings
+    *    - symbols (restricted strings)
+    *    - vectors
+    *    - maps
+    *    - addresses
+    *
+    * of which we currently only provide u64 and vector, and I'm only
+    * adding u64 as well as vector right now so there's more than one
+    * cases.
+    *
+    * Note that you can't manipulate Cryptol enums very much in SAW
+    * (yet), but that's ok; we shouldn't have to.
+    *
+    * It would be better not to need HostInvalid but until we have
+    * a better Option.cry we need something to stuff in failures.
+    */
+/* apparently we can't have this at all, even if SAW never sees it
+   enum HostVal =
+        HostInvalid
+      | HostU64 [64]
+      | HostVec VecRepresentation
+*/
+   type TypeTag = [1]
+   TagU64 = 0
+   TagVec = 1
+
+   newtype HostHeap = {
+      //values: Array Handle HostVal,
+      types: Array Handle TypeTag,
+      values_u64: Array Handle [64],
+      values_vec: Array Handle VecRepresentation,
+      next: Handle
+   }
+
+/* this also doesn't work
+   /*
+    * Allocate a value and store it in the state.
+    */
+   alloc : HostVal -> Heap -> (Heap, Handle)
+   alloc v s = (s', handle)
+      where
+         handle = s.next
+         values' = arrayUpdate s.values handle v
+         s' = HostHeap { values = values', next = s.next + 1 }
+
+   /*
+    * Look up a value. Out of range handles produce None.
+    */
+   lookup : Handle -> Heap -> Option::T HostVal
+   lookup h s =
+      if h < s.next then Option::some (arrayLookup s.values h)
+      else Option::none' HostInvalid
+*/
+
+/*
+ * Typed allocate wrappers
+ */
+
+alloc_u64 : [64] -> Heap -> (Heap, Handle)
+//alloc_u64 n s = alloc (HostU64 n) s
+alloc_u64 n s = (s', handle)
+   where
+      handle = s.next
+      types' = arrayUpdate s.types handle TagU64
+      values_u64' = arrayUpdate s.values_u64 handle n
+      s' = HostHeap {
+         types = types',
+         values_u64 = values_u64',
+         values_vec = s.values_vec,
+         next = s.next + 1
+      }
+
+alloc_vec : VecRepresentation -> Heap -> (Heap, Handle)
+//alloc_vec rep s = alloc (HostVec rep) s
+alloc_vec rep s = (s', handle)
+   where
+      handle = s.next
+      types' = arrayUpdate s.types handle TagVec
+      values_vec' = arrayUpdate s.values_vec handle rep
+      s' = HostHeap {
+         types = types',
+         values_u64 = s.values_u64,
+         values_vec = values_vec',
+         next = s.next + 1
+      }
+
+/*
+ * Typed lookup wrappers
+ */
+
+lookup_u64 : Handle -> Heap -> Option::T [64]
+lookup_u64 h s =
+//   /* ugh we really need a better Option */
+//   case Option::unwrap_or (lookup h s) HostInvalid of
+//      HostU64 n -> Option::some n
+//      _ -> Option::none' 0
+   if h > s.next then Option::none' 0
+   | arrayLookup s.types h != TagU64 then Option::none' 0
+   else Option::some (arrayLookup s.values_u64 h)
+
+lookup_vec : Handle -> Heap -> Option::T VecRepresentation
+lookup_vec h s =
+//   /* ugh we really need a better Option */
+//   case Option::unwrap_or (lookup h s) HostInvalid of
+//      HostVec rep -> Option::some rep
+//      _ -> Option::none' invalid_vec_representation
+   if h > s.next then Option::none' invalid_vec_representation
+   | arrayLookup s.types h != TagVec then Option::none' invalid_vec_representation
+   else Option::some (arrayLookup s.values_vec h)
+

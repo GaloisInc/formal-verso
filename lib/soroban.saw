@@ -42,6 +42,7 @@ typedef SorobanMIRItems = {
    BoolType : (() -> MIRAdt),
    U32ValType : (() -> MIRAdt),
    SymbolValType : (() -> MIRAdt),
+   VecObjectType : (() -> MIRAdt),
    RawValType : (() -> MIRAdt)
 };
 
@@ -71,6 +72,11 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
     *
     * XXX: seems like we don't need both the delay behavior and
     * the features list. Simplify?
+    *
+    * XXX: also, while maybe there's some virtue to looking up types
+    * in advance (so they only get looked up once each) I'm not sure
+    * there's anything to be gained by having value construction
+    * functions here vs. just calling them as needed.
     */
 
    // non-soroban
@@ -97,6 +103,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
    let BoolType = find_adt_when "bool_val" "soroban_env_common::raw_val::Bool" in
    let U32ValType = find_adt_when "u32_val" "soroban_env_common::num::U32Val" in
    let SymbolValType = find_adt_when "symbol" "soroban_env_common::symbol::Symbol" in
+   let VecObjectType = find_adt_when "vec_val" "soroban_env_common::raw_val::VecObject" in
    let RawValType = find_adt "soroban_env_common::raw_val::RawVal" in
 
    {
@@ -121,6 +128,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
       BoolType = BoolType,
       U32ValType = U32ValType,
       SymbolValType = SymbolValType,
+      VecObjectType = VecObjectType,
       RawValType = RawValType
    };
 
@@ -179,11 +187,14 @@ let soroban_value_valid (t : Type) : Term =
       {{ Values::u32_valid }}
    else if type_eq t {| Values::SymbolT |} then
       {{ Values::symbol_valid }}
+   else if type_eq t {| Values::VecObjectT |} then
+      {{ Values::vecobject_valid }}
    else if type_eq t {| Values::RawT |} then
       {{ Values::raw_valid }}
    else if type_eq t {| Store::T |} then
       // XXX: this gets passed here, but shouldn't be. ignore it for now
       // (this logic is for value types!)
+      // XXX: this shouldn't happen any more, remove this case
       {{ \_ -> True }}
    else
       run (fail (str_concat (show t) " has no validity predicate"));
@@ -223,6 +234,8 @@ let soroban_value_to_raw (t : Type) : Term =
       {{ Values::u32_to_raw }}
    else if type_eq t {| Values::SymbolT |} then
       {{ Values::symbol_to_raw }}
+   else if type_eq t {| Values::VecObjectT |} then
+      {{ Values::vecobj_to_raw }}
    else
       run (fail (str_concat (show t) " cannot be converted to Raw"));
 
@@ -247,6 +260,8 @@ let soroban_value_from_raw (t : Type) : Term =
       {{ Values::u32_from_raw }}
    else if type_eq t {| Values::SymbolT |} then
       {{ Values::symbol_from_raw }}
+   else if type_eq t {| Values::VecObjectT |} then
+      {{ Values::vecobj_from_raw }}
    else
       run (fail (str_concat (show t) " cannot be converted from Raw"));
 
@@ -264,6 +279,8 @@ let soroban_value_type_to_mir (smi : SorobanMIRItems) t =
       mir_adt (smi.U32ValType ())
    else if type_eq t {| Values::SymbolT |} then
       mir_adt (smi.SymbolType ())
+   else if type_eq t {| Values::VecObjectT |} then
+      mir_adt (smi.VecObjectType ())
    else if type_eq t {| Values::RawT |} then
       mir_adt (smi.RawValType ())
    else
@@ -333,6 +350,18 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
             soroban_value_to_mir smi {{ Values::symbol_to_raw x }}
          ]
       ]
+   else if type_eq t {| Values::VecObjectT |} then
+      /*
+       * We could convert to Vec<T> rather than VecObject the same way
+       * symbols get converted to Symbol rather than SymbolVal. It is
+       * the same kind of wrapper (it is just an Env and VecObject)...
+       * but that requires handling T, and that creates all kinds of
+       * complications because Rust's monomorphization pass happens
+       * upstream of MIR where we're working.
+       */
+      mir_struct_value (smi.VecObjectType ()) [
+         soroban_value_to_mir smi {{ Values::vecobject_to_raw x }}
+      ]
    else if type_eq t {| Values::RawT |} then
       mir_struct_value (smi.RawValType ()) [
          // XXX: can't do this, it makes SAW unable to match specs
@@ -341,6 +370,75 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
       ]
    else
       run (fail (str_concat (show t) " cannot be converted to a MIR value"));
+
+
+////////////////////////////////////////////////////////////
+// SDK value interface for host-stored objects
+
+typedef SorobanHostHeapState = {
+   ghoststate : Ghost
+};
+
+soroban_hostheap_state <- do {
+   ghoststate <- declare_ghost_state "Soroban::hostheap";
+   let state = {
+      ghoststate = ghoststate
+   };
+   return state;
+};
+
+/* The state should be a Values::HostHeap */
+let soroban_hostheap_assert_state (state : Term) : MIRSetup () = do {
+   mir_ghost_value soroban_hostheap_state.ghoststate state;
+};
+
+let soroban_hostheap_get_state () : MIRSetup Term = do {
+   /*
+    * There isn't a get operation for SAWscript ghost variables (yet)
+    * but allocating a fresh var and asserting equality to the
+    * existing state is an adequate workaround.
+    *
+    * Note that it'll work even if what you need to do is extract the
+    * state so as to run a custom equivalence test on it; this will
+    * give a value bit-identical to the current state that you can
+    * then do whatever other comparison on.
+    */
+   state <- mir_fresh_cryptol_var "Soroban::hostheap::get_state" {| Values::HostHeap |};
+   soroban_hostheap_assert_state state;
+   return state;
+};
+
+/* We can't do this; there's no mir_ghost_set_value yet */
+//let soroban_hostheap_set_state (state : Term) : MIRSetup () = do {
+//   mir_ghost_set_value soroban_hostheap_state.ghoststate state;
+//};
+
+/*
+ * Given a function from hostheap state to hostheap state and
+ * something, call it on the current state, update the state with the
+ * results, and return the value.
+ *
+ * f can be thought of as a computation in the hostheap state monad
+ * and this function does the computation to get the value out, given
+ * that the state is ghost state kept in the SAWscript monad.
+ *
+ * (note though that we don't have anything as organized as an actual
+ * monad definition, just state transformer functions, because the
+ * type system tools aren't there)
+ *
+ * f's Cryptol type should be:
+ *    Values::HostHeap -> (Values::HostHeap, t)
+ *
+ * ...can't do this until we get mir_ghost_set_value
+ */
+//let soroban_hostheap_run (f : Term) : MIRSetup Term = do {
+//   state <- soroban_hostheap_get_state ();
+//   let stateret = {{ f state }};
+//   let state' = {{ stateret.0 }};
+//   let ret = {{ stateret.1 }};
+//   soroban_hostheap_set_state state';
+//   return ret;
+//};
 
 
 ////////////////////////////////////////////////////////////
@@ -463,6 +561,7 @@ let storage_has_spec (smi : SorobanMIRItems) = do {
    mir_points_to self (smi.EnvVal ());
 
    k <- soroban_value_fresh "storage.has.k" {| Values::RawT |};
+   // XXX: should assert that k has a valid type tag
 
    soroban_storage_assert_state store;
 
@@ -483,6 +582,7 @@ let storage_get_spec (smi : SorobanMIRItems) = do {
    mir_points_to self (smi.EnvVal ());
 
    k <- soroban_value_fresh "storage.get.k" {| Values::RawT |};
+   // XXX: should assert that k has a valid type tag
 
    // XXX is it really wrong to call get without first calling has?
    // seems unusual, and also inconsistent with the return type of
@@ -513,6 +613,7 @@ let storage_put_spec (smi : SorobanMIRItems) = do {
 
    k <- soroban_value_fresh "storage.put.k" {| Values::RawT |};
    v <- soroban_value_fresh "storage.put.v" {| Values::RawT |};
+   // XXX: should assert that k and v have valid type tags
 
    soroban_storage_assert_state store;
 
@@ -623,6 +724,8 @@ let logging_add_spec (smi : SorobanMIRItems) = do {
    // get a fresh args (which is actually a reference to an array)
    // XXX it appears to be an array of any length? for now use a length
    // of 1
+   // XXX: should also assert that each raw value in the array has
+   // a valid type tag
    let tyargs = mir_array 1 (mir_adt (smi.RawValType ()));
    args_val <- mir_fresh_var "args_val" tyargs;
    args <- mir_alloc tyargs;

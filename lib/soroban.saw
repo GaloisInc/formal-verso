@@ -440,6 +440,365 @@ let soroban_hostheap_get_state () : MIRSetup Term = do {
 //   return ret;
 //};
 
+/*
+ * Specs for the SDK code.
+ */
+
+/*
+ * Create a new vector. Takes one argument of type Values::Raw::T.
+ * If it's Values::void, the length of the new vector is 0. Otherwise
+ * it must be a U32Val that gives the length.
+ *
+ * Write separate specs for the void and u32 cases. This makes the
+ * type wrangling easier.
+ *
+ * vec_new(env: Env, c: RawVal) : VecObject
+ */
+let vec_new_empty_spec (smi : SorobanMIRItems) = do {
+
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get a host heap
+   heap <- mir_fresh_cryptol_var "values.vec_new/empty.heap" {| Values::HostHeap |};
+   soroban_hostheap_assert_state heap;
+
+   // call the function
+   mir_execute_func [self, mir_term {{ Values::void }}];
+
+   /*
+    * The function allocates space on the external (host-side) heap
+    * and returns a handle to it. Allocate a space in our model of the
+    * host-side heap.
+    *
+    * Because we aren't verifying the host-side function, we can just
+    * use the handle we get back from our model as the return value.
+    * However, if we wanted to actually verify the host-side function,
+    * that wouldn't be good enough; the handle value might not be the
+    * same. Instead, we'd need to create a fresh u32 for the actual
+    * return value and assert that it and our model handle both
+    * point to the right vector data.
+    *
+    * Downstream of here anything that uses the handle should be
+    * checking the value pointed to, not the handle value itself,
+    * because (like a pointer) the actual handle value isn't
+    * meaningful, and furthermore, you can have two different
+    * handles for two copies of the same vector and they should
+    * be treated as equal vector objects.
+    *
+    * (In principle we could make our heap model accurate enough that
+    * the handle values would match up, since it's a table index and
+    * not an actual pointer. But that doesn't address the comparison
+    * concerns. For the moment the model isn't exact either -- on the
+    * host side there are two object tables, not one, and the bottom
+    * bit of the handle chooses between them. It isn't clear so far
+    * what the difference between them is, but it doesn't appear to be
+    * something we need to model to verify contracts.)
+    */
+   let heap'v = {{ Values::vecobj_empty heap }};
+   let heap' = {{ heap'v.0 }};
+   let v = {{ heap'v.1 }};
+
+   // return the new object handle
+   let mir_v = soroban_value_to_mir smi v;
+   mir_return mir_v;
+};
+let vec_new_nonempty_spec (smi : SorobanMIRItems) = do {
+
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get a host heap
+   heap <- mir_fresh_cryptol_var "values.vec_new/nonempty.heap" {| Values::HostHeap |};
+   soroban_hostheap_assert_state heap;
+
+   // get an argument
+   n <- soroban_value_fresh "values.vec_new/nonempty.n" {| Values::U32T |};
+   let native_n = {{ Values::u32_to_native n }};
+   let mir_n = soroban_value_to_mir smi n;
+
+   // call the function
+   mir_execute_func [self, mir_n];
+
+   // allocate in the model
+   let heap'v = {{ Values::vecobj_n native_n }};
+   let heap' = {{ heap'v.0 }};
+   let v = {{ heap'v.1 }};
+
+   // return the new object handle
+   let mir_v = soroban_value_to_mir smi v;
+   mir_return mir_v;
+};
+
+/*
+ * Get the length of the vector v.
+ *
+ * vec_len(env: Env, v: VecObject) : U32Val
+ */
+let vec_len_spec (smi : SorobanMIRItems) = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get an argument
+   v <- soroban_value_fresh "values.vec_len.v" {| Values::VecObjectT |};
+   let mir_v = soroban_value_to_mir smi v;
+
+   // get a host heap, which has a mapping for the VecObject
+   heap <- mir_fresh_cryptol_var "values.vec_len.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::vecobj_exists v heap }};
+   soroban_hostheap_assert_state heap;
+
+   // get the length
+   let native_len = {{ Values::vecobj_len v heap }};
+   let len = {{ Values::u32_from_native native_len }};
+
+   // call the function
+   mir_execute_func [self, mir_v];
+
+   // return the Values::U32::T length
+   mir_return (mir_term len);
+};
+
+/*
+ * Get index i of the vector v.
+ *
+ * i must be in bounds.
+ *
+ * vec_get(env: Env, v: VecObject, i: U32Val) : RawVal
+ */
+let vec_get_spec (smi : SorobanMIRItems) = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get a vector argument
+   v <- soroban_value_fresh "values.vec_get.v" {| Values::VecObjectT |};
+   let mir_v = soroban_value_to_mir smi v;
+
+   // get an index argument
+   i <- soroban_value_fresh "values.vec_get.i" {| Values::U32T |};
+   let native_i = {{ Values::u32_to_native i }};
+   let mir_i = soroban_value_to_mir smi i;
+
+   // get a host heap, which has a mapping for the VecObject
+   heap <- mir_fresh_cryptol_var "values.vec_get.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::vecobj_exists v heap }};
+   soroban_hostheap_assert_state heap;
+
+   // get the length, check bounds requirement
+   let native_len = {{ Values::vecobj_len v heap }};
+   mir_assert {{ native_i < native_len }};
+
+   // get the value
+   let ret = {{ Values::vecobj_get v i heap }};
+   let mir_ret = soroban_value_to_mir smi ret;
+
+   // call the function
+   mir_execute_func [self, mir_v, mir_i];
+
+   // return the value
+   mir_return (mir_term ret);
+};
+
+/*
+ * Get index 0 of the vector v. Vector must not be empty.
+ * Not sure why this is its own hypercall (vs. a wrapper around vec_get).
+ *
+ * vec_front(env: Env, v: VecObject) : RawVal
+ */
+//let vec_front_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Get index (len - 1) of the vector v. Vector must not be empty.
+ *
+ * vec_back(env: Env, v: VecObject) : RawVal
+ */
+//let vec_back_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Update index i of the vector v to value x. Returns the new
+ * vector.
+ *
+ * i must be in bounds.
+ *
+ * vec_put(env: Env, v: VecObject, i: U32Val, x: RawVal) : VecObject
+ */
+//let vec_put_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Remove index i of the vector v. Returns the new smaller vector.
+ *
+ * i must be in bounds.
+ *
+ * vec_del(env: Env, v: VecObject, i: U32Val) : VecObject
+ */
+//let vec_del_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Inset at index i of the vector v. Returns the new larger vector.
+ *
+ * i must be in bounds.
+ *
+ * vec_ins(env: Env, v: VecObject, i: U32Val, x : RawVal) : VecObject
+ */
+//let vec_ins_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Insert value at the front. Returns the new larger vector.
+ *
+ * vec_push_front(env: Env, v: VecObject, x: RawVal) : VecObject
+ */
+//let vec_push_front_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Remove the value at the front. Vector must not be empty.
+ *
+ * Apparently equivalent to vec_del(v, 0), not sure why it's
+ * its own hypercall.
+ *
+ * vec_pop_front(env: Env, v: VecObject) : RawVal)
+ */
+//let vec_pop_front_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Insert value at the end. Returns the new larger vector.
+ *
+ * vec_push_back(env: Env, v: VecObject, x: RawVal) : VecObject
+ */
+//let vec_push_back_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Remove the value at the end. Vector must not be empty.
+ *
+ * vec_pop_back(env: Env, v: VecObject) : RawVal
+ */
+//let vec_pop_back_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Concatenate two vecs. Total length must not overflow u32.
+ * Returns the new vector.
+ *
+ * vec_append(env: Env, v1: VecObject, v2: VecObject) : VecObject
+ */
+//let vec_append_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Extract the range start-end as a new vector.
+ * (Range appears to mean start through end - 1)
+ * Indexes must be in bounds.
+ *
+ * vec_slice(env: Env, v: VecObject, start: U32Val, end: U32Val) : VecObject
+ */
+//let vec_slice_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Find the index of the first occurrence of x. Returns void if
+ * there is none.
+ *
+ * vec_first_index_of(env: Env, v: VecObject, x: RawVal) : RawVal
+ */
+//let vec_first_index_of_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Find the index of the last occurrence of x. Returns void if
+ * there is none.
+ *
+ * vec_last_index_of(env: Env, v: VecObject, x: RawVal) : RawVal
+ */
+//let vec_last_index_of_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Search for x. Returns two u32s in a u64. The lower one is
+ * the vector index for the value. The upper one is either 1
+ * (meaning the value in question is there) or 0 (meaning it's
+ * not but that's where it would be / where to put it).
+ *
+ * Yes, it appears to return a Rust u64 and not a U64Val.
+ *
+ * vec_binary_search(env: Env, v: VecObject, x: RawVal) : u64
+ */
+//let vec_binary_search_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Create a new vector from the n RawVals at the given address a.
+ *
+ * vec_new_from_linear_memory(env: Env, a: U32Val, n: U32Val) : VecObject
+ */
+//let vec_new_from_linear_memory_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Get all the values from the vector into a buffer at the given
+ * address a. Not sure what happens if n doesn't match the length.
+ *
+ * vec_unpack_to_linear_memory(env: Env, v: VecObject,
+ *                             a: U32Val, n: U32Val) : Void
+ */
+//let vec_unpack_to_linear_memory_spec (smi : SorobanMIRItems) = do {
+//};
+
+/*
+ * Construct the "overrides" (checked or admitted SAW theorems, in
+ * this case admitted) for the SDK host-stored-value interface.
+ */
+let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
+   vec_new_overrides <- do {
+      if string_list.elem "vec_new" features then do {
+         vec_new_empty_spec <- mir_unsafe_assume_spec mod
+            "soroban_sdk::env::{impl#12}::vec_new"
+            (vec_new_empty_spec smi);
+         vec_new_nonempty_spec <- mir_unsafe_assume_spec mod
+            "soroban_sdk::env::{impl#12}::vec_new"
+            (vec_new_nonempty_spec smi);
+         return [vec_new_empty_spec, vec_new_nonempty_spec];
+      }
+      else
+         return [];
+   };
+   vec_len_overrides <- do {
+      if string_list.elem "vec_len" features then do {
+         vec_len_spec <- mir_unsafe_assume_spec mod
+            "soroban_sdk::env::{impl#12}::vec_len"
+            (vec_len_spec smi);
+         return [vec_len_spec];
+      }
+      else
+         return [];
+   };
+   vec_get_overrides <- do {
+      if string_list.elem "vec_get" features then do {
+         vec_get_spec <- mir_unsafe_assume_spec mod
+            "soroban_sdk::env::{impl#12}::vec_get"
+            (vec_get_spec smi);
+         return [vec_get_spec];
+      }
+      else
+         return [];
+   };
+   return (list.concats [
+      vec_new_overrides,
+      vec_len_overrides,
+      vec_get_overrides
+   ]);
+};
+
 
 ////////////////////////////////////////////////////////////
 // SDK storage interface
@@ -814,10 +1173,14 @@ let soroban_init (mod : MIRModule) (features : [String]) : TopLevel SorobanAPI =
    let smi = make_soroban_mir_items mod features;
 
    storage_overrides <- make_storage_overrides smi mod features;
+   hostvalue_overrides <- make_hostvalue_overrides smi mod features;
+
+   // note: "concat" is what's usually called append
+   let sdk_overrides = concat hostvalue_overrides storage_overrides;
 
    return {
       mod = mod,
       smi = smi,
-      sdk_overrides = storage_overrides
+      sdk_overrides = sdk_overrides
    };
 };

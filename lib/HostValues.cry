@@ -125,6 +125,10 @@ vec_representation_seq seq =
 invalid_vec_representation : VecRepresentation
 invalid_vec_representation = vec_representation_empty
 
+/* get nth value, or return default value if out of range */
+vec_representation_get_default : VecRepresentation -> [32] -> RawRawVal -> RawRawVal
+vec_representation_get_default rep n dfl =
+   if n < rep.size then arrayLookup rep.data n else dfl
 
 
 private
@@ -223,6 +227,18 @@ alloc_vec rep s = (s', handle)
 /*
  * Typed lookup wrappers
  */
+
+present_as_u64 : Handle -> Heap -> Bool
+present_as_u64 h s =
+   if h > s.next then False
+   | arrayLookup s.types h != TagU64 then False
+   else True
+
+present_as_vec : Handle -> Heap -> Bool
+present_as_vec h s =
+   if h > s.next then False
+   | arrayLookup s.types h != TagVec then False
+   else True
 
 lookup_u64 : Handle -> Heap -> Option::T [64]
 lookup_u64 h s =

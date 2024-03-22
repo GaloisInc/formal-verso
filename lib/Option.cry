@@ -55,6 +55,9 @@ is_some o = o.is_ok
 unsafe_unwrap : {a} Option a -> a
 unsafe_unwrap o = o.value
 
+crashing_unwrap : {a} Option a -> a
+crashing_unwrap o = if o.is_ok then o.value else error "Option::crashing_unwrap"
+
 unwrap_or : {a} Option a -> a -> a
 unwrap_or o def = if o.is_ok then o.value else def
 

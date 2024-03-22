@@ -289,6 +289,9 @@ private
    rawraw_of_vals: {n} fin n => [n] Val -> [n] [64]
    rawraw_of_vals vs = map rawraw_of_val vs
 
+   val_of_rawraw : [WORD_BITS] -> Val
+   val_of_rawraw rr = Val { bits = rr }
+
 
 /*
  * Construction functions
@@ -443,6 +446,27 @@ submodule Raw where
    // val.rs lines 792-795
    is_false : T -> Bool
    is_false v = val_eq v val_false
+
+   // additional type tests
+
+   is_bool : T -> Bool
+   is_bool v = is_true v \/ is_false v
+
+   is_u32 : T -> Bool
+   is_u32 v = tag_of_val v == tag_u32val
+
+   is_i32 : T -> Bool
+   is_i32 v = tag_of_val v == tag_i32val
+
+   is_symbol : T -> Bool
+   is_symbol v =
+      tag_of_val v == tag_symbolsmall \/ tag_of_val v == tag_symbolobject
+
+   is_vec : T -> Bool
+   is_vec v = tag_of_val v == tag_vecobject
+
+   is_map : T -> Bool
+   is_map v = tag_of_val v == tag_mapobject
 
 
 ////////////////////////////////////////////////////////////
@@ -672,6 +696,11 @@ submodule VecObject where
    valid : T -> Bool
    valid vs = valid' vs.val
 
+   // note: call plain valid first
+   valid_with_heap : T -> HostValues::Heap -> Bool
+   valid_with_heap vs heap = HostValues::present_as_vec handle heap
+      where handle = major_of_val vs.val
+
    to_raw : T -> Val
    to_raw vs = vs.val
 
@@ -682,6 +711,8 @@ submodule VecObject where
 
    from_handle : [32] -> T
    from_handle handle = T { val = val_of_major_minor_tag handle 0 tag_vecobject }
+
+   // allocating constructors
 
    from_vecrep : HostValues::VecRepresentation -> HostValues::Heap -> (HostValues::Heap, T)
    from_vecrep rep state = (state', from_handle handle)
@@ -715,6 +746,26 @@ submodule VecObject where
    seq: {n} n < 0xffffffff => [n] Val -> HostValues::Heap -> (HostValues::Heap, T)
    seq vs state = from_vecrep rep state
       where rep = HostValues::vec_representation_seq (rawraw_of_vals vs)
+
+   // lookups
+   // these will all crash on nonexistent values; use valid_with_heap first
+   getrep: T -> HostValues::Heap -> HostValues::VecRepresentation
+   getrep vs heap = Option::crashing_unwrap optval
+      where
+         handle = major_of_val vs.val
+         optval = HostValues::lookup_vec handle heap
+
+   len: T -> HostValues::Heap -> [32]
+   len vs heap = rep.size
+      where rep = getrep vs heap
+
+   // get the kth value; return unit when out of bounds
+   get: T -> [32] -> HostValues::Heap -> Val
+   get vs k heap = val_of_rawraw rawraw
+      where
+         rep = getrep vs heap
+         dfl = rawraw_of_val (Void::to_raw unit)
+         rawraw = HostValues::vec_representation_get_default rep k dfl
 
 
 ////////////////////////////////////////////////////////////
@@ -769,6 +820,7 @@ symbol_from_native = Symbol::from_native
 symbol_is_small = Symbol::is_small
 
 vecobject_valid = VecObject::valid
+vecobj_valid_with_heap = VecObject::valid_with_heap
 vecobject_from_raw = VecObject::from_raw
 vecobject_to_raw = VecObject::to_raw
 vecobj_empty = VecObject::empty
@@ -778,6 +830,8 @@ vecobj_triple = VecObject::triple
 vecobj_quad = VecObject::quad
 vecobj_n = VecObject::n
 vecobj_seq = VecObject::seq
+vecobj_len = VecObject::len
+vecobj_get = VecObject::get
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good
@@ -786,3 +840,11 @@ raw_valid _ = True
 
 raw_from_payload = Raw::from_payload
 raw_get_payload = Raw::get_payload
+
+raw_is_void = Raw::is_void
+raw_is_bool = Raw::is_bool
+raw_is_u32 = Raw::is_u32
+raw_is_i32 = Raw::is_i32
+raw_is_symbol = Raw::is_symbol
+raw_is_vec = Raw::is_vec
+raw_is_map = Raw::is_map

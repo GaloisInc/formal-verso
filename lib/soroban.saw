@@ -11,6 +11,7 @@ Option <- cryptol_load "Option.cry";
 Values <- cryptol_load "Values.cry";
 Store <- cryptol_load "Store.cry";
 Log <- cryptol_load "Log.cry";
+EventLog <- cryptol_load "EventLog.cry";
 
 
 ////////////////////////////////////////////////////////////
@@ -35,6 +36,8 @@ typedef SorobanMIRItems = {
    MaybeEnvVal : (() -> MIRValue),
    StorageType : (() -> MIRAdt),
    StorageVal : (() -> MIRValue),
+   EventsType : (() -> MIRAdt),
+   EventsVal : (() -> MIRValue),
    SymbolType : (() -> MIRAdt),
 
    // from the soroban_env_common crate
@@ -96,6 +99,8 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
    let MaybeEnvVal () = mir_struct_value (MaybeEnvType ()) [GuestVal ()] in
    let StorageType = find_adt_when "storage" "soroban_sdk::storage::Storage" in
    let StorageVal () = mir_struct_value (StorageType ()) [EnvVal ()] in
+   let EventsType = find_adt_when "events" "soroban_sdk::events::Events" in
+   let EventsVal () = mir_struct_value (EventsType ()) [EnvVal ()] in
    let SymbolType = find_adt_when "symbol" "soroban_sdk::symbol::Symbol" in
 
    // from the soroban_env_common crate
@@ -121,6 +126,8 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
       MaybeEnvVal = MaybeEnvVal,
       StorageType = StorageType,
       StorageVal = StorageVal,
+      EventsType = EventsType,
+      EventsVal = EventsVal,
       SymbolType = SymbolType,
 
       // from the soroban_env_common crate
@@ -244,7 +251,7 @@ let soroban_value_to_raw (t : Type) : Term =
  * (type is passed as the first argument)
  *
  * Returns None if the raw value is not actually a value
- * of the right type. Crashes if the type is wrong.
+ * of the right type. Crashes if the type is invalid/inappropriate.
  *
  * The real type is:
  *    soroban_value_from_raw : (t : Type) -> Values::Raw::T -> Option::T t
@@ -431,14 +438,16 @@ let soroban_hostheap_get_state () : MIRSetup Term = do {
  *
  * ...can't do this until we get mir_ghost_set_value
  */
-//let soroban_hostheap_run (f : Term) : MIRSetup Term = do {
-//   state <- soroban_hostheap_get_state ();
-//   let stateret = {{ f state }};
-//   let state' = {{ stateret.0 }};
-//   let ret = {{ stateret.1 }};
-//   soroban_hostheap_set_state state';
-//   return ret;
-//};
+let soroban_hostheap_run (f : Term) : MIRSetup Term = do {
+   state <- soroban_hostheap_get_state ();
+   let stateret = {{ f state }};
+   let state' = {{ stateret.0 }};
+   let ret = {{ stateret.1 }};
+   // XXX for now pretend this will work
+   soroban_hostheap_assert_state state';
+   //soroban_hostheap_set_state state';
+   return ret;
+};
 
 /*
  * Specs for the SDK code.
@@ -1043,7 +1052,10 @@ let storage_get_spec (smi : SorobanMIRItems) = do {
 /*
  * Spec for put_contract_data
  *
- * XXX: why are we calling our internal things "set" when the SDK uses "put"?
+ * Note that put_contract_data is the internal function where we cut
+ * off symbolic execution with a spec. The user-facing interface is
+ * env.storage.set(). This is why some things are called "set" and
+ * others are "put".
  */
 let storage_put_spec (smi : SorobanMIRItems) = do {
    store <- mir_fresh_cryptol_var "storage.put.store" {| Store::T |};
@@ -1096,7 +1108,7 @@ let make_storage_overrides (smi : SorobanMIRItems) mod features = do {
  * Spec for the logging interface.
  *
  * Similarly to the storage interface, we name things as follows:
- *    - "logging" is the name of the over all interface and concept
+ *    - "logging" is the name of the overall interface and concept
  *    - "log" is the name of the data structure we use to model the contents
  *
  * There are three parts to this code:
@@ -1198,6 +1210,295 @@ let make_logging_overrides (smi : SorobanMIRItems) mod features = do {
 
 
 ////////////////////////////////////////////////////////////
+// SDK events interface
+
+/*
+ * Spec for the events interface.
+ *
+ * We name things as follows:
+ *    - "events" is the name of the overall interface and concept
+ *    - "eventlog" is the name of the data structure we use to model
+ *      the contents
+ *
+ * There are three parts to this code:
+ *    - a Cryptol model of the event log
+ *    - ghost state and glue for handling the model in SAW
+ *    - SAW specs for the Rust interface
+ */
+
+typedef SorobanEventsState = {
+   ghoststate : Ghost
+};
+
+soroban_events_state <- do {
+   ghoststate <- declare_ghost_state "Soroban::events";
+   let state = {
+      ghoststate = ghoststate
+   };
+   return state;
+};
+
+/*
+ * Assert equality of the internally tracked model of the event log
+ * contents with a new EventLog.
+ */
+let soroban_events_assert_state (log : Term /* EventLog */) : MIRSetup () = do {
+   mir_ghost_value soroban_events_state.ghoststate log;
+};
+
+/*
+ * Only certain types are allowed in event topics. The top level must
+ * be either unit, a single value, or a tuple of arity 2, 3, or 4.
+ * Longer tuples are prohibited.
+ *
+ * Beneath that, no contained value is supposed to be a Vec, Map,
+ * Bytes longer than 32, BytesN longer than 32, or a contract.
+ *
+ * I think this means that nested tuples, which manifest at the value
+ * level as vectors, are prohibited, although that's not absolutely
+ * 100% clear.
+ *
+ * If so, though, it rules out anything that contains sub-values,
+ * which is convenient for the purposes of checking that only legal
+ * types are present.
+ *
+ * Don't allow Raw::T. I suspect that the Rust code probably does
+ * allow raw values as long as the type tag corresponds to something
+ * allowed, and should check up on that, but for the moment it seems
+ * like a bad idea, and unnecessary, to allow it.
+ */
+let soroban_events_legal_in_topic (x: Term) =
+   let t = type x in
+   if type_eq t {| Values::VoidT |} then {{ True }}
+   else if type_eq t {| Values::BoolT |} then {{ True }}
+   else if type_eq t {| Values::U32T |} then {{ True }}
+   else if type_eq t {| Values::SymbolT |} then {{ True }}
+   else if type_eq t {| Values::VecObjectT |} then {{ False }}
+   else if type_eq t {| Values::RawT |} then {{ False }}
+   else
+      run (fail (str_concat (show t) " cannot be used as an event topic"));
+
+/*
+ * Headache: we need a second copy of this that operates on Raw::T and
+ * uses Cryptol-level type tests on the type tags. We can't branch on
+ * model-level values in SAWscript.
+ *
+ * This one also can't crash because it's used to constrain inputs.
+ */
+let soroban_events_legal_in_topic' (x: Term) =
+   {{
+      if Values::raw_is_void x then True
+      | Values::raw_is_bool x then True
+      | Values::raw_is_u32 x then True
+      | Values::raw_is_symbol x then True
+      | Values::raw_is_vec x then False
+      else False
+   }};
+
+/*
+ * Ops on the event log. These are basically type wrappers around
+ * the Cryptol version of the event log.
+ */
+
+/*
+ * Cons up the topic for an event.
+ *
+ * An event can be void/unit, a single value, or a tuple of arity 2-4.
+ * Only some types are allowed to appear.
+ *
+ * These functions serve to both construct the underlying VecObject
+ * and also to check the legality of the types.
+ */
+
+let soroban_events_mktopic_0 () = do {
+   let ctor = {{ Values::vecobj_empty }};
+   topic <- soroban_hostheap_run ctor;
+   return topic;
+};
+
+let soroban_events_mktopic_1 val = do {
+   mir_assert (soroban_events_legal_in_topic val);
+   let val_to_raw = soroban_value_to_raw (type val);
+   let val_raw = {{ val_to_raw val }};
+   let ctor = {{ Values::vecobj_singleton val_raw }};
+   topic <- soroban_hostheap_run ctor;
+   return topic;
+};
+
+let soroban_events_mktopic_2 val1 val2 = do {
+   mir_assert (soroban_events_legal_in_topic val1);
+   mir_assert (soroban_events_legal_in_topic val2);
+   let val1_to_raw = soroban_value_to_raw (type val1);
+   let val2_to_raw = soroban_value_to_raw (type val2);
+   let val1_raw = {{ val1_to_raw val1 }};
+   let val2_raw = {{ val2_to_raw val2 }};
+   let ctor = {{ Values::vecobj_pair val1_raw val2_raw }};
+   topic <- soroban_hostheap_run ctor;
+   return topic;
+};
+
+let soroban_events_mktopic_3 val1 val2 val3 = do {
+   mir_assert (soroban_events_legal_in_topic val1);
+   mir_assert (soroban_events_legal_in_topic val2);
+   mir_assert (soroban_events_legal_in_topic val3);
+   let val1_to_raw = soroban_value_to_raw (type val1);
+   let val2_to_raw = soroban_value_to_raw (type val2);
+   let val3_to_raw = soroban_value_to_raw (type val3);
+   let val1_raw = {{ val1_to_raw val1 }};
+   let val2_raw = {{ val2_to_raw val2 }};
+   let val3_raw = {{ val3_to_raw val3 }};
+   let ctor = {{ Values::vecobj_triple val1_raw val2_raw val3_raw }};
+   topic <- soroban_hostheap_run ctor;
+   return topic;
+};
+
+let soroban_events_mktopic_4 val1 val2 val3 val4 = do {
+   mir_assert (soroban_events_legal_in_topic val1);
+   mir_assert (soroban_events_legal_in_topic val2);
+   mir_assert (soroban_events_legal_in_topic val3);
+   mir_assert (soroban_events_legal_in_topic val4);
+   let val1_to_raw = soroban_value_to_raw (type val1);
+   let val2_to_raw = soroban_value_to_raw (type val2);
+   let val3_to_raw = soroban_value_to_raw (type val3);
+   let val4_to_raw = soroban_value_to_raw (type val4);
+   let val1_raw = {{ val1_to_raw val1 }};
+   let val2_raw = {{ val2_to_raw val2 }};
+   let val3_raw = {{ val3_to_raw val3 }};
+   let val4_raw = {{ val4_to_raw val4 }};
+   let ctor = {{ Values::vecobj_quad val1_raw val2_raw val3_raw val4_raw }};
+   topic <- soroban_hostheap_run ctor;
+   return topic;
+};
+
+/*
+ * Get a fresh topic. So far we seem to be able to avoid having
+ * separate versions for lengths 0 through 4. We just get all four
+ * possible values and use a suitable get variant that returns unit
+ * for out-of-range values.
+ */
+let soroban_events_fresh_topic name heap = do {
+   t <- soroban_value_fresh name {| Values::VecObjectT |};
+   mir_assert {{ Values::vecobj_valid_with_heap t heap }};
+   mir_assert {{ Values::vecobj_len t heap <= 4 }};
+   let val1 = {{ Values::vecobj_get t 0 heap }};
+   let val2 = {{ Values::vecobj_get t 1 heap }};
+   let val3 = {{ Values::vecobj_get t 2 heap }};
+   let val4 = {{ Values::vecobj_get t 3 heap }};
+   mir_assert (soroban_events_legal_in_topic' val1);
+   mir_assert (soroban_events_legal_in_topic' val2);
+   mir_assert (soroban_events_legal_in_topic' val3);
+   mir_assert (soroban_events_legal_in_topic' val4);
+   return t;
+};
+
+/*
+ * Publish an event.
+ *    - events should be an EventLog.
+ *    - topic should be constructed from one of the mktopic functions above
+ *    - value can be any value type
+ *
+ * It would be tidier if the topic could be a Cryptol tuple of Soroban
+ * values instead of needing to be consed explicitly with a special
+ * function. However, it's not clear how to assert about legal topic
+ * types in that setup.
+ */
+let soroban_events_publish (events : Term) (topic : Term) (value : Term) = do {
+   let value_to_raw = soroban_value_to_raw (type value);
+   let raw_value = {{ value_to_raw value }};
+   let events' = {{ EventLog::add events topic raw_value }};
+   return events';
+};
+
+/*
+ * Specs for the SDK code.
+ */
+
+/*
+ * Env::contract_event() is the underlying interface for
+ * Env::events().publish(). We intercept things at this level because
+ * at this point the values have been unwrapped to RawVal, which has
+ * significant advantages:
+ *    - we don't have to worry about what the actual types of the
+ *      values are, only that they're valid;
+ *    - the function's monomorphic, so we only need one copy of the
+ *      spec and we don't have to grope about for the monomorphized
+ *      names of various versions generated by the compiler.
+ */
+let contract_event_spec (smi : SorobanMIRItems) = do {
+   // get a fresh environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get a heap
+   heap <- mir_fresh_cryptol_var "contract_event.heap" {| Values::HostHeap |};
+
+   // get a fresh event log
+   elog <- mir_fresh_cryptol_var "events.publish.elog" {| EventLog::T |};
+
+   // get a fresh topic
+   //
+   // At the user-facing level the topic is a tuple of 0-4 elements,
+   // which are I think typically Symbols but can be anything that's
+   // legal in topics (there are some other restrictions, see above).
+   //
+   // This always appears at this level as a VecObject. It is not
+   // unwrapped to a RawVal before making the hypercall out of the
+   // Soroban guest. Don't ask me why, but I guess it's more type-safe
+   // this way and thus generally preferable.
+   //
+   // It isn't clear to me exactly what happens with single elements
+   // given that Rust doesn't have monoples, but there's enough
+   // trait-based type conversion magic going on for any value to be
+   // promoted to a Vec of length 1 (Vec is the SDK internal type for
+   // wrapping VecObject) without the exact pathway being super
+   // obvious.
+   //
+   // In the model world a VecObject is a Values::VecObject::T.
+   topic <- soroban_events_fresh_topic "contract_event.topic" heap;
+   let topic_mir = soroban_value_to_mir smi topic;
+
+   // get a fresh value
+   val <- mir_fresh_cryptol_var "events.publish.val" {| Values::RawT |};
+   let val_mir = soroban_value_to_mir smi val;
+
+   // bind the ghost state
+   soroban_hostheap_assert_state heap;
+   soroban_events_assert_state elog;
+
+   // (XXX (saw): if one of these is a Term rather than MIRTerm, saw
+   // prints a type error for the whole list rather than for the first
+   // mismatched element.)
+   mir_execute_func [self, topic_mir, val_mir];
+
+   // update the event log
+   let elog' = {{ EventLog::add elog topic val }};
+
+   // assert the updated ghost state
+   // (the heap doesn't change)
+   soroban_hostheap_assert_state heap;
+   soroban_events_assert_state elog';
+
+   // returns the SDK Void value, wrapped in Result
+   return_ok smi {{ Values::unit }};
+};
+
+/*
+ * Construct the "overrides" (checked or admitted SAW theorems, in
+ * this case admitted) for the SDK storage interface.
+ */
+let make_events_overrides (smi : SorobanMIRItems) mod features = do {
+   if string_list.elem "events" features then do {
+      event_spec <- mir_unsafe_assume_spec mod
+         "soroban_sdk::env::{impl#12}::contract_event"
+         (contract_event_spec smi);
+      return [event_spec];
+   }
+   else
+      return [];
+};
+
+
+////////////////////////////////////////////////////////////
 // verify
 
 /*
@@ -1255,9 +1556,13 @@ let soroban_init (mod : MIRModule) (features : [String]) : TopLevel SorobanAPI =
 
    storage_overrides <- make_storage_overrides smi mod features;
    hostvalue_overrides <- make_hostvalue_overrides smi mod features;
+   logging_overrides <- make_logging_overrides smi mod features;
+   events_overrides <- make_events_overrides smi mod features;
 
    // note: "concat" is what's usually called append
-   let sdk_overrides = concat hostvalue_overrides storage_overrides;
+   let sdk_overrides = concat
+       (concat hostvalue_overrides storage_overrides)
+       (concat logging_overrides events_overrides);
 
    return {
       mod = mod,

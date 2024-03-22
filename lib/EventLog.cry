@@ -1,0 +1,22 @@
+module Events where
+
+import Array
+
+import Values as Values
+import submodule Values::Raw as Values::Raw
+import submodule Values::VecObject as Values::VecObject
+
+type T = EventLog
+
+private
+   newtype EventLog = {
+      entries: Array Integer (Values::VecObject::T, Values::Raw::T),
+      count: Integer
+   }
+
+add : EventLog -> Values::VecObject::T -> Values::Raw::T -> EventLog
+add elog topic val =
+   EventLog { entries = entries', count = count' }
+   where
+      entries' = arrayUpdate elog.entries elog.count (topic, val)
+      count' = elog.count + 1

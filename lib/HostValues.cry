@@ -115,6 +115,12 @@ vec_representation_n n v =
    VecRepresentation { data = arr, size = n }
    where arr = arrayConstant v
 
+/* take the sequence seq */
+vec_representation_seq: {n} n <= 0xffffffff => [n] RawRawVal -> VecRepresentation
+vec_representation_seq seq =
+   VecRepresentation { data = arr, size = `n }
+   where arr = arrayRangeUpdate (arrayConstant 0) 0 seq
+
 /* Vector used when an invalid/error version is needed */
 invalid_vec_representation : VecRepresentation
 invalid_vec_representation = vec_representation_empty

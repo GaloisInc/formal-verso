@@ -286,6 +286,10 @@ private
    rawraw_of_val : Val -> [WORD_BITS]
    rawraw_of_val v = v.bits
 
+   rawraw_of_vals: {n} fin n => [n] Val -> [n] [64]
+   rawraw_of_vals vs = map rawraw_of_val vs
+
+
 /*
  * Construction functions
  * (likewise)
@@ -708,6 +712,10 @@ submodule VecObject where
    n num v state = from_vecrep rep state
       where rep = HostValues::vec_representation_n num (rawraw_of_val v)
 
+   seq: {n} n < 0xffffffff => [n] Val -> HostValues::Heap -> (HostValues::Heap, T)
+   seq vs state = from_vecrep rep state
+      where rep = HostValues::vec_representation_seq (rawraw_of_vals vs)
+
 
 ////////////////////////////////////////////////////////////
 // mapobject
@@ -769,6 +777,7 @@ vecobj_pair = VecObject::pair
 vecobj_triple = VecObject::triple
 vecobj_quad = VecObject::quad
 vecobj_n = VecObject::n
+vecobj_seq = VecObject::seq
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

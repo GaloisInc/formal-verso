@@ -523,7 +523,7 @@ let vec_new_nonempty_spec (smi : SorobanMIRItems) = do {
    mir_execute_func [self, mir_n];
 
    // allocate in the model
-   let heap'v = {{ Values::vecobj_n native_n }};
+   let heap'v = {{ Values::vecobj_n native_n heap }};
    let heap' = {{ heap'v.0 }};
    let v = {{ heap'v.1 }};
 
@@ -755,6 +755,64 @@ let vec_get_spec (smi : SorobanMIRItems) = do {
 //};
 
 /*
+ * This is not a hypercall but we need to intercept it before it calls
+ * vec_new_from_linear_memory, as in order to do that it does a
+ * pointer -> u32 cast that crux-mir can't handle.
+ *
+ * vec_new_from_slice(env: Env, vals: &[RawVal]) ->
+ *    Result<VecObject, Self::Error>
+ *
+ * For the moment at least we need a separate copy of this for each
+ * distinct length, because arrays of symbolic length cause problems.
+ */
+let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+   // alternatively, get a Guest to override at a different point
+   //self <- mir_alloc (mir_adt (smi.GuestType ()));
+   //mir_points_to self (smi.GuestVal ());
+
+   // get a length
+   //n <- mir_fresh_cryptol_var "values.vec_new_from_slice.len" {| [32] |};
+
+   // get a sequence of Values::Raw::T
+   vals_contents_seq <- mir_fresh_cryptol_var "values.vec_new_from_slice.vals_contents" {| [n] Values::RawT |};
+
+   // turn it into a SAW list and convert to MIR RawVals
+   let mir_vals_contents_list = list.map (soroban_value_to_mir smi) (eval_list vals_contents_seq);
+
+   // get the corresponding MIR array
+   let RawVal = soroban_value_type_to_mir smi {| Values::RawT |};
+   let mir_vals_contents_array = mir_array_value RawVal mir_vals_contents_list;
+
+   // allocate and populate a reference to it
+   vals <- mir_alloc (mir_array n RawVal);
+   mir_points_to vals mir_vals_contents_array;
+
+   // get a host heap model
+   heap <- mir_fresh_cryptol_var "values.vec_new_from_slice.heap" {| Values::HostHeap |};
+   soroban_hostheap_assert_state heap;
+
+   // call the function, taking a slice reference to the array
+   mir_execute_func [self, mir_slice_value vals];
+
+   // allocate in the model
+   let heap'v = {{ Values::vecobj_seq vals_contents_seq heap }};
+   let heap' = {{ heap'v.0 }};
+   let v = {{ heap'v.1 }};
+
+   // return the new object handle
+   // XXX share this logic with return_ok (which is currently below and
+   // needs to be moved up)
+   let rettype = soroban_value_type_to_mir smi (type v);
+   let mir_v = soroban_value_to_mir smi v;
+   let ok = mir_enum_value (smi.ResultInfallibleType rettype) "Ok" [mir_v];
+   mir_return ok;
+};
+
+
+/*
  * Construct the "overrides" (checked or admitted SAW theorems, in
  * this case admitted) for the SDK host-stored-value interface.
  */
@@ -792,10 +850,33 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       else
          return [];
    };
+   vec_new_from_slice_overrides <- do {
+      if string_list.elem "vec_new_from_slice" features then do {
+         let make n = do {
+            spec <- mir_unsafe_assume_spec mod
+               // either of these is a possible interception point
+               // (the first just calls the second)
+               "soroban_sdk::env::{impl#9}::vec_new_from_slice"
+               //"soroban_env_guest::guest::{impl#0}::vec_new_from_slice"
+               (vec_new_from_slice_spec n smi);
+            return spec;
+         };
+         spec_0 <- make 0;
+         spec_1 <- make 1;
+         spec_2 <- make 2;
+         spec_3 <- make 3;
+         spec_4 <- make 4;
+         spec_5 <- make 5;
+         return [spec_0, spec_1, spec_2, spec_3, spec_4, spec_5];
+      }
+      else
+         return [];
+   };
    return (list.concats [
       vec_new_overrides,
       vec_len_overrides,
-      vec_get_overrides
+      vec_get_overrides,
+      vec_new_from_slice_overrides
    ]);
 };
 

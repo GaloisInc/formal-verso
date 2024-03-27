@@ -382,6 +382,13 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
 ////////////////////////////////////////////////////////////
 // SDK value interface for host-stored objects
 
+/*
+ * This is the heap state used by the hypercall-level override specs
+ * found immediately below. Specs for contract code (and any specs for
+ * higher-level parts of the SDK) should not touch this state directly
+ * but maintain their own model and assert equivalence between that
+ * model and this one before and after mir_execute_func.
+ */
 typedef SorobanHostHeapState = {
    ghoststate : Ghost
 };
@@ -438,16 +445,14 @@ let soroban_hostheap_get_state () : MIRSetup Term = do {
  *
  * ...can't do this until we get mir_ghost_set_value
  */
-let soroban_hostheap_run (f : Term) : MIRSetup Term = do {
-   state <- soroban_hostheap_get_state ();
-   let stateret = {{ f state }};
-   let state' = {{ stateret.0 }};
-   let ret = {{ stateret.1 }};
-   // XXX for now pretend this will work
-   soroban_hostheap_assert_state state';
-   //soroban_hostheap_set_state state';
-   return ret;
-};
+//let soroban_hostheap_run (f : Term) : MIRSetup Term = do {
+//   state <- soroban_hostheap_get_state ();
+//   let stateret = {{ f state }};
+//   let state' = {{ stateret.0 }};
+//   let ret = {{ stateret.1 }};
+//   soroban_hostheap_set_state state';
+//   return ret;
+//};
 
 /*
  * Specs for the SDK code.
@@ -1308,36 +1313,74 @@ let soroban_events_legal_in_topic' (x: Term) =
  *
  * These functions serve to both construct the underlying VecObject
  * and also to check the legality of the types.
+ *
+ * They return a Cryptol-level pair (heap', topic).
+ *
+ * For now you must thread a heap through explicitly. In principle we
+ * could transparently attach to a heap via ghost state (the first
+ * version of this code did), but for the moment there are two
+ * problems with that:
+ *
+ * 1. In general there are multiple heap models. For each function we
+ * handle there are two: one that is manipulated by the spec, and one
+ * that is manipulated by the code. The latter happens via overrides
+ * of the functions _it_ calls, but those overrides are themselves
+ * specs and also have two heap models. (Eventually the bottommost
+ * layer of leaf functions relates its model directly to the memory
+ * state of the allocator. In principle, at least; we don't get that
+ * far because we stop at the hypercall layer and the whole purpose of
+ * the host heap is that it's on the other side of the hypercall
+ * layer. Because of that, and because we mostly have exactly two
+ * layers of specs (one for contracts and one for hypercalls, with
+ * most of the guest-side SDK code being executed as if it's part of
+ * the contract) it's tempting to also just declare two copies of the
+ * heap model and bind explicitly to them. These functions here are
+ * allocation helpers for specs for contracts that post events, so
+ * they'll always be intended to manipulate the contract-side heap
+ * model. However, it's wrong to do it that way. Furthermore, in the
+ * absence of sufficient organizing features in SAWscript (probably
+ * either stronger types or stronger modules would do) it will be easy
+ * to mix things up and call code that implicitly attaches to the
+ * wrong heap model, and then things will mysteriously not work in
+ * ways that are bound to be hard to figure out.
+ *
+ * 2. More pragmatically, right now we don't have a way to _update_ a
+ * piece of ghost state, only assert about it, which means that we can
+ * get a heap, then allocate and generate an updated heap, but after
+ * that we have no way to put the updated heap back, and that's a
+ * blocker.
+ *
+ * Note that the original version of this code did actually bind to
+ * an implicit heap in ghost state, and it's much nicer that way, so
+ * if the situation described above improves one should definitely
+ * consider reverting portions of the commit that changed that (which
+ * is also the one that added this comment). But don't revert the
+ * whole thing as the original circumstances were that it was
+ * accidentally using the _wrong_ heap.
  */
 
-let soroban_events_mktopic_0 () = do {
-   let ctor = {{ Values::vecobj_empty }};
-   topic <- soroban_hostheap_run ctor;
-   return topic;
+let soroban_events_mktopic_0 heap = do {
+   return {{ Values::vecobj_empty heap }};
 };
 
-let soroban_events_mktopic_1 val = do {
+let soroban_events_mktopic_1 val heap = do {
    mir_assert (soroban_events_legal_in_topic val);
    let val_to_raw = soroban_value_to_raw (type val);
    let val_raw = {{ val_to_raw val }};
-   let ctor = {{ Values::vecobj_singleton val_raw }};
-   topic <- soroban_hostheap_run ctor;
-   return topic;
+   return {{ Values::vecobj_singleton val_raw heap }};
 };
 
-let soroban_events_mktopic_2 val1 val2 = do {
+let soroban_events_mktopic_2 val1 val2 heap = do {
    mir_assert (soroban_events_legal_in_topic val1);
    mir_assert (soroban_events_legal_in_topic val2);
    let val1_to_raw = soroban_value_to_raw (type val1);
    let val2_to_raw = soroban_value_to_raw (type val2);
    let val1_raw = {{ val1_to_raw val1 }};
    let val2_raw = {{ val2_to_raw val2 }};
-   let ctor = {{ Values::vecobj_pair val1_raw val2_raw }};
-   topic <- soroban_hostheap_run ctor;
-   return topic;
+   return {{ Values::vecobj_pair val1_raw val2_raw heap }};
 };
 
-let soroban_events_mktopic_3 val1 val2 val3 = do {
+let soroban_events_mktopic_3 val1 val2 val3 heap = do {
    mir_assert (soroban_events_legal_in_topic val1);
    mir_assert (soroban_events_legal_in_topic val2);
    mir_assert (soroban_events_legal_in_topic val3);
@@ -1347,12 +1390,10 @@ let soroban_events_mktopic_3 val1 val2 val3 = do {
    let val1_raw = {{ val1_to_raw val1 }};
    let val2_raw = {{ val2_to_raw val2 }};
    let val3_raw = {{ val3_to_raw val3 }};
-   let ctor = {{ Values::vecobj_triple val1_raw val2_raw val3_raw }};
-   topic <- soroban_hostheap_run ctor;
-   return topic;
+   return {{ Values::vecobj_triple val1_raw val2_raw val3_raw heap }};
 };
 
-let soroban_events_mktopic_4 val1 val2 val3 val4 = do {
+let soroban_events_mktopic_4 val1 val2 val3 val4 heap = do {
    mir_assert (soroban_events_legal_in_topic val1);
    mir_assert (soroban_events_legal_in_topic val2);
    mir_assert (soroban_events_legal_in_topic val3);
@@ -1365,9 +1406,7 @@ let soroban_events_mktopic_4 val1 val2 val3 val4 = do {
    let val2_raw = {{ val2_to_raw val2 }};
    let val3_raw = {{ val3_to_raw val3 }};
    let val4_raw = {{ val4_to_raw val4 }};
-   let ctor = {{ Values::vecobj_quad val1_raw val2_raw val3_raw val4_raw }};
-   topic <- soroban_hostheap_run ctor;
-   return topic;
+   return {{ Values::vecobj_quad val1_raw val2_raw val3_raw val4_raw heap }};
 };
 
 /*

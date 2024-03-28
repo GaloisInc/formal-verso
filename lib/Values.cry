@@ -257,8 +257,8 @@ newtype Val = { bits: [WORD_BITS] }
 // then we need this (and to use it explicitly where it would be nicer
 // to write "==")
 private
-   val_eq : Val -> Val -> Bool
-   val_eq v1 v2 = v1.bits == v2.bits
+   small_val_eq : Val -> Val -> Bool
+   small_val_eq v1 v2 = v1.bits == v2.bits
 
 /*
  * I am not transcribing the assorted Rust type widgetry since
@@ -357,9 +357,9 @@ submodule Raw where
    // val.rs lines 645-683
    val_is_good : T -> Bool
    val_is_good v =
-      if val_eq v val_false \/
-         val_eq v val_true \/
-         val_eq v val_unit then True
+      if small_val_eq v val_false \/
+         small_val_eq v val_true \/
+         small_val_eq v val_unit then True
        | tag == tag_u32val then minor_of_val v == 0
        | tag == tag_i32val then minor_of_val v == 0
        | tag == tag_symbolsmall then smallsym_body_valid (body_of_val v)
@@ -437,15 +437,15 @@ submodule Raw where
 
    // val.rs lines 782-785
    is_void : T -> Bool
-   is_void v = val_eq v val_unit
+   is_void v = small_val_eq v val_unit
 
    // val.rs lines 787-790
    is_true : T -> Bool
-   is_true v = val_eq v val_true
+   is_true v = small_val_eq v val_true
 
    // val.rs lines 792-795
    is_false : T -> Bool
-   is_false v = val_eq v val_false
+   is_false v = small_val_eq v val_false
 
    // additional type tests
 
@@ -480,7 +480,7 @@ submodule Void where
    unit = T { val = val_unit }
 
    valid' : Val -> Bool
-   valid' v = val_eq v val_unit
+   valid' v = small_val_eq v val_unit
 
    valid : T -> Bool
    valid x = valid' x.val
@@ -516,7 +516,7 @@ submodule Bool where
    false = T { val = val_false }
 
    valid' : Val -> Bool
-   valid' v = val_eq v val_true \/ val_eq v val_false
+   valid' v = small_val_eq v val_true \/ small_val_eq v val_false
 
    valid : T -> Bool
    valid b = valid' b.val
@@ -531,7 +531,7 @@ submodule Bool where
 
    to_native : T -> Bool
    to_native b =
-      if val_eq b.val true.val then True else False
+      if small_val_eq b.val true.val then True else False
 
    from_native : Bool -> T
    from_native b = if b then true else false

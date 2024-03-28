@@ -1338,10 +1338,22 @@ let soroban_events_get_state () : MIRSetup Term = do {
  * Assert equivalence of the internally tracked model of the event log
  * contents (what we saw when executing) with a new EventLog (what's
  * expected).
+ *
+ * XXX: for now, don't use EventLog::equiv. It tickles saw-script #2035,
+ * which is not trivial to deal with (especially since dealing with it
+ * in this context requires some way to tell SAW that EventLog::equiv
+ * is an equivalence suitable for its concerns).
+ *
+ * Since for the time being at least we're verifying two copies of the
+ * same heap model, as long as we do the same host allocations in the
+ * same order in specs and the Rust code we'll get the same handles back
+ * and we can get away with using bit equality of host heap handles for
+ * comparison.
  */
 let soroban_events_assert_state (log : Term /* EventLog */) : MIRSetup () = do {
-   seenlog <- soroban_events_get_state ();
-   mir_assert {{ EventLog::equiv seenlog log }};
+   //seenlog <- soroban_events_get_state ();
+   //mir_assert {{ EventLog::equiv seenlog log }};
+   mir_ghost_value soroban_events_state.ghoststate log;
 };
 
 /*

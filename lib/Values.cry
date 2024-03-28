@@ -750,6 +750,13 @@ submodule VecObject where
    from_handle : [32] -> T
    from_handle handle = T { val = val_of_major_minor_tag handle 0 tag_vecobject }
 
+   // XXX: this should not exist, but for the time being we need it to
+   // live in the None case of Option::T and similar circumstances.
+   // When we can use Cryptol sums and the real Option type, it should
+   // go away.
+   invalid : T
+   invalid = T {val = badval }
+
    // allocating constructors
 
    from_vecrep : HostValues::VecRepresentation -> HostValues::Heap -> (HostValues::Heap, T)
@@ -775,6 +782,10 @@ submodule VecObject where
    quad: Val -> Val -> Val -> Val -> HostValues::Heap -> (HostValues::Heap, T)
    quad v w x y state = from_vecrep rep state
       where rep = HostValues::vec_representation_quad (rawraw_of_val v) (rawraw_of_val w) (rawraw_of_val x) (rawraw_of_val y)
+
+   quint: Val -> Val -> Val -> Val -> Val -> HostValues::Heap -> (HostValues::Heap, T)
+   quint v w x y z state = from_vecrep rep state
+      where rep = HostValues::vec_representation_quint (rawraw_of_val v) (rawraw_of_val w) (rawraw_of_val x) (rawraw_of_val y) (rawraw_of_val z)
 
    /* this could use a better name, but what? */
    n: [32] -> Val -> HostValues::Heap -> (HostValues::Heap, T)
@@ -867,11 +878,13 @@ vecobject_valid = VecObject::valid
 vecobj_valid_with_heap = VecObject::valid_with_heap
 vecobject_from_raw = VecObject::from_raw
 vecobject_to_raw = VecObject::to_raw
+vecobj_invalid = VecObject::invalid
 vecobj_empty = VecObject::empty
 vecobj_singleton = VecObject::singleton
 vecobj_pair = VecObject::pair
 vecobj_triple = VecObject::triple
 vecobj_quad = VecObject::quad
+vecobj_quint = VecObject::quint
 vecobj_n = VecObject::n
 vecobj_seq = VecObject::seq
 vecobj_len = VecObject::len

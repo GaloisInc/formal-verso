@@ -109,6 +109,12 @@ vec_representation_quad n m o p =
    VecRepresentation { data = arr, size = 4 }
    where arr = arrayUpdate (arrayUpdate (arrayUpdate (arrayConstant p) 0 n) 1 m) 2 o
 
+/* Quint */
+vec_representation_quint : RawRawVal -> RawRawVal -> RawRawVal -> RawRawVal -> RawRawVal -> VecRepresentation
+vec_representation_quint n m o p q =
+   VecRepresentation { data = arr, size = 5 }
+   where arr = arrayUpdate (arrayUpdate (arrayUpdate (arrayUpdate (arrayConstant q) 0 n) 1 m) 2 o) 3 p
+
 /* N copies of V */
 vec_representation_n: [32] -> RawRawVal -> VecRepresentation
 vec_representation_n n v =

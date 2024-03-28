@@ -224,6 +224,51 @@ let soroban_value_fresh (name : String) (t : Type) : MIRSetup Term = do {
 };
 
 /*
+ * Generate a fresh raw value.
+ */
+let soroban_raw_fresh (name : String) = do {
+   v <- soroban_value_fresh name {| Values::RawT |};
+   return v;
+};
+
+/*
+ * Generate a sequence of n fresh RawVals.
+ * (For n > 0, the empty case isn't interesting.)
+ *
+ * The sequence itself is not (must not be) fresh.
+ */
+let soroban_raw1_fresh basename : MIRSetup Term = do {
+   val0 <- soroban_raw_fresh (str_concat basename ".val0");
+   return {{ [val0] }};
+};
+let soroban_raw2_fresh basename : MIRSetup Term = do {
+   val0 <- soroban_raw_fresh (str_concat basename ".val0");
+   val1 <- soroban_raw_fresh (str_concat basename ".val1");
+   return {{ [val0, val1] }};
+};
+let soroban_raw3_fresh basename : MIRSetup Term = do {
+   val0 <- soroban_raw_fresh (str_concat basename ".val0");
+   val1 <- soroban_raw_fresh (str_concat basename ".val1");
+   val2 <- soroban_raw_fresh (str_concat basename ".val2");
+   return {{ [val0, val1, val2] }};
+};
+let soroban_raw4_fresh basename : MIRSetup Term = do {
+   val0 <- soroban_raw_fresh (str_concat basename ".val0");
+   val1 <- soroban_raw_fresh (str_concat basename ".val1");
+   val2 <- soroban_raw_fresh (str_concat basename ".val2");
+   val3 <- soroban_raw_fresh (str_concat basename ".val3");
+   return {{ [val0, val1, val2, val3] }};
+};
+let soroban_raw5_fresh basename : MIRSetup Term = do {
+   val0 <- soroban_raw_fresh (str_concat basename ".val0");
+   val1 <- soroban_raw_fresh (str_concat basename ".val1");
+   val2 <- soroban_raw_fresh (str_concat basename ".val2");
+   val3 <- soroban_raw_fresh (str_concat basename ".val3");
+   val4 <- soroban_raw_fresh (str_concat basename ".val4");
+   return {{ [val0, val1, val2, val3, val4] }};
+};
+
+/*
  * Convert from a specific value type to Values::Raw::T.
  * Value types only.
  *
@@ -779,7 +824,7 @@ let vec_get_spec (smi : SorobanMIRItems) = do {
  * For the moment at least we need a separate copy of this for each
  * distinct length, because arrays of symbolic length cause problems.
  */
-let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) = do {
+let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do {
    // get an environment
    self <- mir_alloc (mir_adt (smi.EnvType ()));
    mir_points_to self (smi.EnvVal ());
@@ -787,22 +832,49 @@ let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) = do {
    //self <- mir_alloc (mir_adt (smi.GuestType ()));
    //mir_points_to self (smi.GuestVal ());
 
-   // get a length
-   //n <- mir_fresh_cryptol_var "values.vec_new_from_slice.len" {| [32] |};
+   // this is unfortunate but seems to be the only way to make it work
+   // (passing in the contents causes problems)
+   contents <- do {
+      if eval_bool {{ `n == 0 }} then do {
+         // The type annotation here is required or eval_list fails.
+         return {{ [] : [n] Values::RawT }};
+      }
+      else if eval_bool {{ `n == 1 }} then do {
+         contents <- soroban_raw1_fresh "values.vec_new_from_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 2 }} then do {
+         contents <- soroban_raw2_fresh "values.vec_new_from_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 3 }} then do {
+         contents <- soroban_raw3_fresh "values.vec_new_from_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 4 }} then do {
+         contents <- soroban_raw4_fresh "values.vec_new_from_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 5 }} then do {
+         contents <- soroban_raw5_fresh "values.vec_new_from_slice";
+         return contents;
+      }
+      else do {
+         let msg = "vec_new_from_slice: too many elements: ";
+         run (fail (str_concat msg (show n)));
+      };
+   };
 
-   // get a sequence of Values::Raw::T
-   vals_contents_seq <- mir_fresh_cryptol_var "values.vec_new_from_slice.vals_contents" {| [n] Values::RawT |};
-
-   // turn it into a SAW list and convert to MIR RawVals
-   let mir_vals_contents_list = list.map (soroban_value_to_mir smi) (eval_list vals_contents_seq);
+   // turn the contents into a SAW list and convert to MIR RawVals
+   let mir_contents_list = list.map (soroban_value_to_mir smi) (eval_list contents);
 
    // get the corresponding MIR array
    let RawVal = soroban_value_type_to_mir smi {| Values::RawT |};
-   let mir_vals_contents_array = mir_array_value RawVal mir_vals_contents_list;
+   let mir_contents_array = mir_array_value RawVal mir_contents_list;
 
    // allocate and populate a reference to it
    vals <- mir_alloc (mir_array n RawVal);
-   mir_points_to vals mir_vals_contents_array;
+   mir_points_to vals mir_contents_array;
 
    // get a host heap model
    heap <- mir_fresh_cryptol_var "values.vec_new_from_slice.heap" {| Values::HostHeap |};
@@ -812,7 +884,7 @@ let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) = do {
    mir_execute_func [self, mir_slice_value vals];
 
    // allocate in the model
-   let heap'v = {{ Values::vecobj_seq vals_contents_seq heap }};
+   let heap'v = {{ Values::vecobj_seq contents heap }};
    let heap' = {{ heap'v.0 }};
    let v = {{ heap'v.1 }};
 
@@ -866,7 +938,7 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
    };
    vec_new_from_slice_overrides <- do {
       if string_list.elem "vec_new_from_slice" features then do {
-         let make n = do {
+         let make (n : Int) : TopLevel MIRSpec = do {
             spec <- mir_unsafe_assume_spec mod
                // either of these is a possible interception point
                // (the first just calls the second)

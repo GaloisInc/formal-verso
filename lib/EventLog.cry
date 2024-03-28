@@ -9,8 +9,11 @@ import submodule Values::VecObject as Values::VecObject
 type T = EventLog
 
 private
+   type Entry = (Values::VecObject::T, Values::Raw::T)
+   type Entries = Array Integer Entry
+
    newtype EventLog = {
-      entries: Array Integer (Values::VecObject::T, Values::Raw::T),
+      entries: Entries,
       count: Integer
    }
 
@@ -20,3 +23,23 @@ add elog topic val =
    where
       entries' = arrayUpdate elog.entries elog.count (topic, val)
       count' = elog.count + 1
+
+private
+   equiv_entry : Entry -> Entry -> Values::HostHeap -> Bool
+   equiv_entry (t1, v1) (t2, v2) heap =
+      Values::vecobj_eq t1 t2 heap /\ Values::raw_eq v1 v2 heap
+
+   equiv_at : EventLog -> EventLog -> Values::HostHeap -> Integer -> Bool
+   equiv_at el1 el2 heap i =
+      if equiv_entry e1 e2 heap == False then False
+      | i >= el1.count then True
+      else equiv_at el1 el2 heap (i + 1)
+      where
+         e1 = arrayLookup el1.entries i
+         e2 = arrayLookup el2.entries i
+
+equiv : EventLog -> EventLog -> Values::HostHeap -> Bool
+equiv el1 el2 heap =
+   if el1.count != el2.count then False
+   else equiv_at el1 el2 heap 0
+

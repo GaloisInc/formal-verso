@@ -130,6 +130,29 @@ vec_representation_get_default : VecRepresentation -> [32] -> RawRawVal -> RawRa
 vec_representation_get_default rep n dfl =
    if n < rep.size then arrayLookup rep.data n else dfl
 
+/* test contents for equivalence */
+private
+   vec_representation_equiv_at :
+          (RawRawVal -> RawRawVal -> Heap -> Bool) ->
+          VecRepresentation -> VecRepresentation -> Heap ->
+          [32] ->
+          Bool
+   vec_representation_equiv_at subcmp rep1 rep2 heap i =
+      if subcmp x1 x2 heap == False then False
+      | i >= rep1.size then True
+      else vec_representation_equiv_at subcmp rep1 rep2 heap (i + 1)
+      where
+         x1 = arrayLookup rep1.data i
+         x2 = arrayLookup rep2.data i
+
+vec_representation_equiv :
+       (RawRawVal -> RawRawVal -> Heap -> Bool) ->
+       VecRepresentation -> VecRepresentation -> Heap ->
+       Bool
+vec_representation_equiv subcmp rep1 rep2 heap =
+   if rep1.size != rep2.size then False
+   else vec_representation_equiv_at subcmp rep1 rep2 heap 0
+
 
 private
    /*

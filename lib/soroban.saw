@@ -1316,11 +1316,32 @@ soroban_events_state <- do {
 };
 
 /*
- * Assert equality of the internally tracked model of the event log
- * contents with a new EventLog.
+ * Extract the internally tracked model of the event log.
+ *
+ * There isn't a get operation for SAWscript ghost variables (yet) but
+ * allocating a fresh var and asserting equality to the existing state
+ * is an adequate workaround.
+ *
+ * Note that it's ok to do this using the implicitly defined
+ * bit-level/SMT-level equality inside mir_ghost_value; it will get us
+ * a model that's physically identical to the current one. Then we can
+ * check for equivalence between that one and another one using the
+ * proper equivalence function.
+ */
+let soroban_events_get_state () : MIRSetup Term = do {
+   state <- mir_fresh_cryptol_var "Soroban::events::get_state" {| EventLog::T |};
+   mir_ghost_value soroban_events_state.ghoststate state;
+   return state;
+};
+
+/*
+ * Assert equivalence of the internally tracked model of the event log
+ * contents (what we saw when executing) with a new EventLog (what's
+ * expected).
  */
 let soroban_events_assert_state (log : Term /* EventLog */) : MIRSetup () = do {
-   mir_ghost_value soroban_events_state.ghoststate log;
+   seenlog <- soroban_events_get_state ();
+   mir_assert {{ EventLog::equiv seenlog log }};
 };
 
 /*

@@ -260,6 +260,35 @@ private
    small_val_eq : Val -> Val -> Bool
    small_val_eq v1 v2 = v1.bits == v2.bits
 
+   full_eq : Val -> Val -> HostValues::Heap -> Bool
+   full_eq v1 v2 heap =
+      if tag1 != tag2 then False
+      | tag1 < tag_symbolsmall then small_val_eq v1 v2
+      //| tag1 == tag_symbolobject  // XXX notyet, the heap doesn't support them yet
+      | tag1 == tag_vecobject then
+           if handle1 == handle2 then True
+           | HostValues::present_as_vec handle1 heap == False then False
+           | HostValues::present_as_vec handle2 heap == False then False
+           else
+              HostValues::vec_representation_equiv rawraw_eq rep1 rep2 heap
+              where
+                 rep1 = Option::crashing_unwrap (HostValues::lookup_vec handle1 heap)
+                 rep2 = Option::crashing_unwrap (HostValues::lookup_vec handle2 heap)
+           where
+              handle1 = major_of_val v1
+              handle2 = major_of_val v2
+      //| tag1 == tag_mapobject  // XXX notyet, not implemented
+      else False
+      where
+         tag1 = tag_of_val v1
+         tag2 = tag_of_val v2
+
+   rawraw_eq : [WORD_BITS] -> [WORD_BITS] -> HostValues::Heap -> Bool
+   rawraw_eq rr1 rr2 heap = full_eq v1 v2 heap
+      where
+         v1 = Val { bits = rr1 }
+         v2 = Val { bits = rr2 }
+
 /*
  * I am not transcribing the assorted Rust type widgetry since
  * it mostly doesn't make sense in Cryptol.
@@ -467,6 +496,10 @@ submodule Raw where
 
    is_map : T -> Bool
    is_map v = tag_of_val v == tag_mapobject
+
+   // go straight to full_eq
+   eq: T -> T -> HostValues::Heap -> Bool
+   eq x y heap = full_eq x y heap
 
 
 ////////////////////////////////////////////////////////////
@@ -678,6 +711,11 @@ submodule Symbol where
    to_native_object : {n} n > MAX_SMALL_CHARS => T -> String n
    to_native_object x = decode_symbolobject x.val
 
+   // defer equality to raw to avoid duplication (since full_eq needs
+   // to be recursive)
+   eq: T -> T -> HostValues::Heap -> Bool
+   eq x y heap = full_eq x.val y.val heap
+
 
 ////////////////////////////////////////////////////////////
 // vecobject
@@ -767,6 +805,11 @@ submodule VecObject where
          dfl = rawraw_of_val (Void::to_raw unit)
          rawraw = HostValues::vec_representation_get_default rep k dfl
 
+   // defer equality to raw to avoid duplication (since full_eq needs
+   // to be recursive)
+   eq: T -> T -> HostValues::Heap -> Bool
+   eq vs1 vs2 heap = full_eq vs1.val vs2.val heap
+
 
 ////////////////////////////////////////////////////////////
 // mapobject
@@ -818,6 +861,7 @@ symbol_to_raw = Symbol::to_raw
 symbol_from_native = Symbol::from_native
 //symbol_to_native = Symbol::to_native
 symbol_is_small = Symbol::is_small
+symbol_eq = Symbol::eq
 
 vecobject_valid = VecObject::valid
 vecobj_valid_with_heap = VecObject::valid_with_heap
@@ -832,6 +876,7 @@ vecobj_n = VecObject::n
 vecobj_seq = VecObject::seq
 vecobj_len = VecObject::len
 vecobj_get = VecObject::get
+vecobj_eq = VecObject::eq
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good
@@ -848,3 +893,4 @@ raw_is_i32 = Raw::is_i32
 raw_is_symbol = Raw::is_symbol
 raw_is_vec = Raw::is_vec
 raw_is_map = Raw::is_map
+raw_eq = Raw::eq

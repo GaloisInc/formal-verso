@@ -612,6 +612,9 @@ let string_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () =
    let heap' = {{ heap'v.0 }};
    let v = {{ heap'v.1 }};
 
+   // update the heap model
+   soroban_hostheap_assert_state heap';
+
    // return the new object handle
    // XXX share this logic with return_ok (which is currently below and
    // needs to be moved up)
@@ -641,8 +644,12 @@ let vec_new_empty_spec (smi : SorobanMIRItems) = do {
    heap <- mir_fresh_cryptol_var "values.vec_new/empty.heap" {| Values::HostHeap |};
    soroban_hostheap_assert_state heap;
 
+   // get the argument (the Soroban-level Void value, but as a RawVal)
+   let arg_val = {{ Values::void_to_raw Values::unit }};
+   let arg_mir = soroban_value_to_mir smi arg_val;
+
    // call the function
-   mir_execute_func [self, mir_term {{ Values::void }}];
+   mir_execute_func [self, arg_mir];
 
    /*
     * The function allocates space on the external (host-side) heap
@@ -677,9 +684,16 @@ let vec_new_empty_spec (smi : SorobanMIRItems) = do {
    let heap' = {{ heap'v.0 }};
    let v = {{ heap'v.1 }};
 
+   // update the heap
+   soroban_hostheap_assert_state heap';
+
    // return the new object handle
+   // XXX share this logic with return_ok (which is currently below and
+   // needs to be moved up)
+   let rettype = soroban_value_type_to_mir smi (type v);
    let mir_v = soroban_value_to_mir smi v;
-   mir_return mir_v;
+   let ok = mir_enum_value (smi.ResultInfallibleType rettype) "Ok" [mir_v];
+   mir_return ok;
 };
 let vec_new_nonempty_spec (smi : SorobanMIRItems) = do {
 
@@ -694,19 +708,29 @@ let vec_new_nonempty_spec (smi : SorobanMIRItems) = do {
    // get an argument
    n <- soroban_value_fresh "values.vec_new/nonempty.n" {| Values::U32T |};
    let native_n = {{ Values::u32_to_native n }};
-   let mir_n = soroban_value_to_mir smi n;
+   let mir_n = soroban_value_to_mir smi {{ Values::u32_to_raw n }};
 
    // call the function
    mir_execute_func [self, mir_n];
 
+   // need a value to put in the vector; should be the raw version of unit
+   let dfl_raw = {{ Values::void_to_raw Values::unit }};
+
    // allocate in the model
-   let heap'v = {{ Values::vecobj_n native_n heap }};
+   let heap'v = {{ Values::vecobj_n native_n dfl_raw heap }};
    let heap' = {{ heap'v.0 }};
    let v = {{ heap'v.1 }};
 
+   // update the heap
+   soroban_hostheap_assert_state heap';
+
    // return the new object handle
+   // XXX share this logic with return_ok (which is currently below and
+   // needs to be moved up)
+   let rettype = soroban_value_type_to_mir smi (type v);
    let mir_v = soroban_value_to_mir smi v;
-   mir_return mir_v;
+   let ok = mir_enum_value (smi.ResultInfallibleType rettype) "Ok" [mir_v];
+   mir_return ok;
 };
 
 /*

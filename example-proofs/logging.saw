@@ -8,7 +8,7 @@ mod <- mir_load_module "../soroban-examples/logging/target/linked-mir.json";
 
 // Initialize soroban verification with logging API and symbols,
 // plus string and vector values
-soroban <- soroban_init mod ["logging", "symbol", "str_val", "string_new_from_slice", "vec_val"];
+soroban <- soroban_init mod ["logging", "symbol", "str_val", "string_new_from_slice", "vec_val", "vec_new", "u32_val"];
 
 // Specification for hello function
 let hello_spec = do {
@@ -18,10 +18,14 @@ let hello_spec = do {
   // Construct the MIR version of the symbol
   let mir_sym = soroban_value_to_mir soroban.smi sym;
 
+  // Get a fresh symbolic heap
+  heap <- mir_fresh_cryptol_var "heap" {| Values::HostHeap |};
+
   // Declare a fresh symbolic log
   log <- mir_fresh_cryptol_var "log" {| Log::T |};
 
-  // Set log as the initial logging state
+  // Assert the initial SDK state
+  soroban_hostheap_assert_state heap;
   soroban_logging_assert_state log;
 
   // Execute the function with an instance of Env and the symbol

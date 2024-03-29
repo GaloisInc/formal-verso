@@ -62,15 +62,30 @@ import Array
 import Option as Option
 
 /*
- * Interface types. We map Handle to HostVal (which may include values
- * of type RawRawVal); the state of the mapping is called Heap because
- * it's ultimately an allocation heap. These types are intended to be
- * written qualified, as in HostValues::Handle and HostValues::T.
+ * Interface types. We map Handle to any/all of the representation
+ * types (which may include values of type RawRawVal); the state of
+ * the mapping is called Heap because it's ultimately an allocation
+ * heap. These types are intended to be written qualified, as in
+ * HostValues::Handle and HostValues::Heap.
  */
 type Handle = [32]
 type RawRawVal = [64]
 //type T = HostVal
 type Heap = HostHeap
+
+/*
+ * Because for the moment we don't need to track the actual strings,
+ * I'm going to start off with a null/dummy string representation.
+ */
+type StringRepresentation = ()
+
+string_representation_dummy : StringRepresentation
+string_representation_dummy = ()
+
+invalid_string_representation : StringRepresentation
+invalid_string_representation = ()
+
+
 
 /*
  * Vectors map 32-bit indexes to 64-bit unwrapped raw values.
@@ -189,14 +204,17 @@ private
       | HostU64 [64]
       | HostVec VecRepresentation
 */
-   type TypeTag = [1]
+   type TypeTag = [2]
    TagU64 = 0
-   TagVec = 1
+   TagString = 1
+   TagVec = 2
+   _TagRubbish = 3
 
    newtype HostHeap = {
       //values: Array Handle HostVal,
       types: Array Handle TypeTag,
       values_u64: Array Handle [64],
+      values_string: Array Handle StringRepresentation,
       values_vec: Array Handle VecRepresentation,
       next: Handle
    }
@@ -235,6 +253,22 @@ alloc_u64 n s = (s', handle)
       s' = HostHeap {
          types = types',
          values_u64 = values_u64',
+         values_string = s.values_string,
+         values_vec = s.values_vec,
+         next = s.next + 1
+      }
+
+alloc_string : StringRepresentation -> Heap -> (Heap, Handle)
+//alloc_string rep s = alloc (HostString rep) s
+alloc_string rep s = (s', handle)
+   where
+      handle = s.next
+      types' = arrayUpdate s.types handle TagString
+      values_string' = arrayUpdate s.values_string handle rep
+      s' = HostHeap {
+         types = types',
+         values_u64 = s.values_u64,
+         values_string = values_string',
          values_vec = s.values_vec,
          next = s.next + 1
       }
@@ -249,6 +283,7 @@ alloc_vec rep s = (s', handle)
       s' = HostHeap {
          types = types',
          values_u64 = s.values_u64,
+         values_string = s.values_string,
          values_vec = values_vec',
          next = s.next + 1
       }
@@ -261,6 +296,12 @@ present_as_u64 : Handle -> Heap -> Bool
 present_as_u64 h s =
    if h > s.next then False
    | arrayLookup s.types h != TagU64 then False
+   else True
+
+present_as_string : Handle -> Heap -> Bool
+present_as_string h s =
+   if h > s.next then False
+   | arrayLookup s.types h != TagString then False
    else True
 
 present_as_vec : Handle -> Heap -> Bool
@@ -278,6 +319,16 @@ lookup_u64 h s =
    if h > s.next then Option::none' 0
    | arrayLookup s.types h != TagU64 then Option::none' 0
    else Option::some (arrayLookup s.values_u64 h)
+
+lookup_string : Handle -> Heap -> Option::T StringRepresentation
+lookup_string h s =
+//   /* ugh we really need a better Option */
+//   case Option::unwrap_or (lookup h s) HostInvalid of
+//      HostString n -> Option::some n
+//      _ -> Option::none' 0
+   if h > s.next then Option::none' invalid_string_representation
+   | arrayLookup s.types h != TagString then Option::none' invalid_string_representation
+   else Option::some (arrayLookup s.values_string h)
 
 lookup_vec : Handle -> Heap -> Option::T VecRepresentation
 lookup_vec h s =

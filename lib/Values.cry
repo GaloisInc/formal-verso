@@ -151,7 +151,7 @@ private
    //tag_u256object = 70 : Tag
    //tag_i256object = 71 : Tag
    //tag_bytesobject = 72 : Tag
-   //tag_stringobject = 73 : Tag
+   tag_stringobject = 73 : Tag
    tag_symbolobject = 74 : Tag
    tag_vecobject = 75 : Tag
    tag_mapobject = 76 : Tag
@@ -660,6 +660,50 @@ i32_zero = I32::ZERO
 
 
 ////////////////////////////////////////////////////////////
+// string
+// (XXX: rust code citations tbd)
+
+// Note that the rust code has an additional layer of type logic
+// around RawVal called Object that's shared by all the host-side
+// objects. We don't model that; we just use Raw.
+
+submodule StringObject where
+   newtype T = { val : Val }
+
+   valid' : Val -> Bool
+   valid' v = tag_of_val v == tag_stringobject /\ minor_of_val v == 0
+
+   valid : T -> Bool
+   valid vs = valid' vs.val
+
+   // note: call plain valid first
+   valid_with_heap : T -> HostValues::Heap -> Bool
+   valid_with_heap vs heap = HostValues::present_as_string handle heap
+      where handle = major_of_val vs.val
+
+   to_raw : T -> Val
+   to_raw vs = vs.val
+
+   from_raw : Val -> Option::T T
+   from_raw v =
+      if valid' v then Option::some (T { val = v })
+      else Option::none' (T { val = badval })
+
+   from_handle : [32] -> T
+   from_handle handle = T { val = val_of_major_minor_tag handle 0 tag_stringobject }
+
+   // allocating constructors
+
+   from_stringrep : HostValues::StringRepresentation -> HostValues::Heap -> (HostValues::Heap, T)
+   from_stringrep rep heap = (heap', from_handle handle)
+      where (heap', handle) = HostValues::alloc_string rep heap
+
+   dummy: () -> HostValues::Heap -> (HostValues::Heap, T)
+   dummy () heap = from_stringrep rep heap
+      where rep = HostValues::string_representation_dummy
+
+
+////////////////////////////////////////////////////////////
 // symbol
 // symbol.rs (more or less all of it)
 
@@ -844,6 +888,7 @@ type HostHeap = HostValues::Heap
 type VoidT = Void::T
 type BoolT = Bool::T
 type U32T = U32::T
+type StringObjectT = StringObject::T
 type SymbolT = Symbol::T
 type VecObjectT = VecObject::T
 type RawT = Raw::T
@@ -865,6 +910,12 @@ u32_from_raw = U32::from_raw
 u32_to_raw = U32::to_raw
 u32_from_native = U32::from_native
 u32_to_native = U32::to_native
+
+strobj_valid = StringObject::valid
+strobj_valid_with_heap = StringObject::valid_with_heap
+strobj_to_raw = StringObject::to_raw
+strobj_from_raw = StringObject::from_raw
+strobj_dummy = StringObject::dummy
 
 symbol_valid = Symbol::valid
 symbol_from_raw = Symbol::from_raw

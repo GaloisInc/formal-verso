@@ -44,6 +44,7 @@ typedef SorobanMIRItems = {
    VoidType : (() -> MIRAdt),
    BoolType : (() -> MIRAdt),
    U32ValType : (() -> MIRAdt),
+   StringObjectType : (() -> MIRAdt),
    SymbolValType : (() -> MIRAdt),
    VecObjectType : (() -> MIRAdt),
    RawValType : (() -> MIRAdt)
@@ -107,6 +108,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
    let VoidType = find_adt_when "void_val" "soroban_env_common::raw_val::Void" in
    let BoolType = find_adt_when "bool_val" "soroban_env_common::raw_val::Bool" in
    let U32ValType = find_adt_when "u32_val" "soroban_env_common::num::U32Val" in
+   let StringObjectType = find_adt_when "str_val" "soroban_env_common::string::StringObject" in
    let SymbolValType = find_adt_when "symbol" "soroban_env_common::symbol::Symbol" in
    let VecObjectType = find_adt_when "vec_val" "soroban_env_common::raw_val::VecObject" in
    let RawValType = find_adt "soroban_env_common::raw_val::RawVal" in
@@ -134,6 +136,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
       VoidType = VoidType,
       BoolType = BoolType,
       U32ValType = U32ValType,
+      StringObjectType = StringObjectType,
       SymbolValType = SymbolValType,
       VecObjectType = VecObjectType,
       RawValType = RawValType
@@ -192,6 +195,8 @@ let soroban_value_valid (t : Type) : Term =
       {{ Values::bool_valid }}
    else if type_eq t {| Values::U32T |} then
       {{ Values::u32_valid }}
+   else if type_eq t {| Values::StringObjectT |} then
+      {{ Values::strobj_valid }}
    else if type_eq t {| Values::SymbolT |} then
       {{ Values::symbol_valid }}
    else if type_eq t {| Values::VecObjectT |} then
@@ -310,6 +315,8 @@ let soroban_value_from_raw (t : Type) : Term =
       {{ Values::bool_from_raw }}
    else if type_eq t {| Values::U32T |} then
       {{ Values::u32_from_raw }}
+   else if type_eq t {| Values::StringObjectT |} then
+      {{ Values::strobj_from_raw }}
    else if type_eq t {| Values::SymbolT |} then
       {{ Values::symbol_from_raw }}
    else if type_eq t {| Values::VecObjectT |} then
@@ -329,6 +336,8 @@ let soroban_value_type_to_mir (smi : SorobanMIRItems) t =
       mir_adt (smi.BoolType ())
    else if type_eq t {| Values::U32T |} then
       mir_adt (smi.U32ValType ())
+   else if type_eq t {| Values::StringObjectT |} then
+      mir_adt (smi.StringObjectType ())
    else if type_eq t {| Values::SymbolT |} then
       mir_adt (smi.SymbolType ())
    else if type_eq t {| Values::VecObjectT |} then
@@ -394,6 +403,10 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
    else if type_eq t {| Values::U32T |} then
       mir_struct_value (smi.U32ValType ()) [
          soroban_value_to_mir smi {{ Values::u32_to_raw x }}
+      ]
+   else if type_eq t {| Values::StringObjectT |} then
+      mir_struct_value (smi.StringObjectType ()) [
+         soroban_value_to_mir smi {{ Values::strobj_to_raw x }}
       ]
    else if type_eq t {| Values::SymbolT |} then
       mir_struct_value (smi.SymbolType ()) [
@@ -563,6 +576,50 @@ let soroban_value_vecobj_5 val1 val2 val3 val4 val5 heap = do {
 /*
  * Specs for the SDK code.
  */
+
+/*
+ * This is not a hypercall but we need to intercept it before it calls
+ * string_new_from_linear_memory, as in order to do that it does a
+ * pointer -> u32 cast that crux-mir can't handle.
+ *
+ * string_new_from_slice(env: Env, slice: &str) ->
+ *    Result<StringObject, Self::Error>
+ */
+let string_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+   // alternatively, get a Guest to override at a different point
+   //self <- mir_alloc (mir_adt (smi.GuestType ()));
+   //mir_points_to self (smi.GuestVal ());
+
+   // get a string of length n for the argument
+   contents <- mir_fresh_cryptol_var "string_new_from_slice.contents" {| String n |};
+
+   // allocate and populate a reference to it
+   ptr <- mir_alloc (mir_array n mir_u8);
+   mir_points_to ptr (mir_term contents);
+
+   // get a host heap model
+   heap <- mir_fresh_cryptol_var "values.string_new_from_slice.heap" {| Values::HostHeap |};
+   soroban_hostheap_assert_state heap;
+
+   // call the function, taking a slice reference to the string reference
+   mir_execute_func [self, mir_str_slice_value ptr];
+
+   // allocate in the model
+   let heap'v = {{ Values::strobj_dummy () heap }};
+   let heap' = {{ heap'v.0 }};
+   let v = {{ heap'v.1 }};
+
+   // return the new object handle
+   // XXX share this logic with return_ok (which is currently below and
+   // needs to be moved up)
+   let rettype = soroban_value_type_to_mir smi (type v);
+   let mir_v = soroban_value_to_mir smi v;
+   let ok = mir_enum_value (smi.ResultInfallibleType rettype) "Ok" [mir_v];
+   mir_return ok;
+};
 
 /*
  * Create a new vector. Takes one argument of type Values::Raw::T.
@@ -964,6 +1021,36 @@ let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do
  * this case admitted) for the SDK host-stored-value interface.
  */
 let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
+   string_new_from_slice_overrides <- do {
+      if string_list.elem "string_new_from_slice" features then do {
+         let make (n : Int) : TopLevel MIRSpec = do {
+            spec <- mir_unsafe_assume_spec mod
+               // either of these is a possible interception point
+               // (the first just calls the second)
+               "soroban_sdk::env::{impl#9}::string_new_from_slice"
+               //"soroban_env_guest::guest::{impl#0}::string_new_from_slice"
+               (string_new_from_slice_spec n smi);
+            return spec;
+         };
+         // need a separate instance for each length. go up to 11
+         spec_0 <- make 0;
+         spec_1 <- make 1;
+         spec_2 <- make 2;
+         spec_3 <- make 3;
+         spec_4 <- make 4;
+         spec_5 <- make 5;
+         spec_6 <- make 6;
+         spec_7 <- make 7;
+         spec_8 <- make 8;
+         spec_9 <- make 9;
+         spec_10 <- make 10;
+         spec_11 <- make 11;
+         return [spec_0, spec_1, spec_2, spec_3, spec_4, spec_5,
+                 spec_6, spec_7, spec_8, spec_9, spec_10, spec_11];
+      }
+      else
+         return [];
+   };
    vec_new_overrides <- do {
       if string_list.elem "vec_new" features then do {
          vec_new_empty_spec <- mir_unsafe_assume_spec mod
@@ -1020,6 +1107,7 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
          return [];
    };
    return (list.concats [
+      string_new_from_slice_overrides,
       vec_new_overrides,
       vec_len_overrides,
       vec_get_overrides,
@@ -1286,48 +1374,50 @@ let soroban_logging_assert_state (log : Term /* Log */) : MIRSetup () = do {
 /*
  * Specs for the SDK code.
  *
- * Wrinkle: the main interface is a macro log! that takes an
- * environment and arbitrarily many arguments and converts that to a
- * call to Logs::add that takes the first string and then arbitrarily
- * many more raw values.
- *
- * Also note that while there's two more calls "all" and "print" on
- * that type, they're only available in test mode, which we don't
- * handle. So for present purposes the log is write-only.
- *
- * Note: in the version of the SDK we're using, logs::Logs::add is called
- * logging::Logger::log
+ * We intercept/override at the hypercall level in order to avoid
+ * dealing directly with the string wrangling that happens in the
+ * logging code.
  */
 
-let logging_add_spec (smi : SorobanMIRItems) = do {
-   // get a fresh log and bind it to the log state
-   log <- mir_fresh_cryptol_var "logging.add.log" {| Log::T |};
-   soroban_logging_assert_state log;
-
+let log_fmt_values_spec (smi : SorobanMIRItems) = do {
    // get a fresh environment
    self <- mir_alloc (mir_adt (smi.EnvType ()));
    mir_points_to self (smi.EnvVal ());
 
-   // get a fresh string
-   str <- mir_alloc mir_str;
+   // get a host heap
+   heap <- mir_fresh_cryptol_var "log_fmt_values.heap" {| Values::HostHeap |};
 
-   // get a fresh args (which is actually a reference to an array)
-   // XXX it appears to be an array of any length? for now use a length
-   // of 1
-   // XXX: should also assert that each raw value in the array has
-   // a valid type tag
-   let tyargs = mir_array 1 (mir_adt (smi.RawValType ()));
-   args_val <- mir_fresh_var "args_val" tyargs;
-   args <- mir_alloc tyargs;
-   mir_points_to args (mir_term args_val);
+   // get a fresh log
+   log <- mir_fresh_cryptol_var "log_fmt_values.log" {| Log::T |};
 
-   mir_execute_func [self, str, args];
+   // Get some args. The first arg is a StringObject, the second a
+   // VecObject.
+   fmt_val <- soroban_value_fresh "log_fmt_values.fmt" {| Values::StringObjectT |};
+   args_val <- soroban_value_fresh "log_fmt_values.args" {| Values::VecObjectT |};
 
-   // compute the proper updated log state
+   // Assert that both exist in the heap.
+   mir_assert {{ Values::strobj_valid_with_heap fmt_val heap }};
+   mir_assert {{ Values::vecobj_valid_with_heap args_val heap }};
+
+   // get MIR versions of the args
+   let fmt_mir = soroban_value_to_mir smi fmt_val;
+   let args_mir = soroban_value_to_mir smi args_val;
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
+   soroban_logging_assert_state log;
+
+   // call the function
+   mir_execute_func [self, fmt_mir, args_mir];
+
+   // update the log state
    let log' = {{ Log::add log }};
 
-   // assert the updated log state
+   // assert the updated SDK state (heap does not change)
+   soroban_hostheap_assert_state heap;
    soroban_logging_assert_state log';
+
+   // function returns Rust void (I think)
 };
 
 /*
@@ -1336,11 +1426,10 @@ let logging_add_spec (smi : SorobanMIRItems) = do {
  */
 let make_logging_overrides (smi : SorobanMIRItems) mod features = do {
    if string_list.elem "logging" features then do {
-      add_spec <- mir_unsafe_assume_spec mod
-         //"soroban_sdk::logs::{impl#1}::add"
-         "soroban_sdk::logging::{impl#1}::log"
-         (logging_add_spec smi);
-      return [add_spec];
+      fmt_spec <- mir_unsafe_assume_spec mod
+         "soroban_sdk::env::{impl#12}::log_fmt_values"
+         (log_fmt_values_spec smi);
+      return [fmt_spec];
    }
    else
       return [];

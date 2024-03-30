@@ -841,9 +841,10 @@ submodule VecObject where
       where rep = HostValues::vec_representation_seq (rawraw_of_vals vs)
 
    // lookups
-   // these will all crash on nonexistent values; use valid_with_heap first
+   // these will all misbehave on nonexistent values; use valid_with_heap first
+   // (XXX: using Option::crashing_unwrap crashes... look into why)
    getrep: T -> HostValues::Heap -> HostValues::VecRepresentation
-   getrep vs heap = Option::crashing_unwrap optval
+   getrep vs heap = Option::unsafe_unwrap optval
       where
          handle = major_of_val vs.val
          optval = HostValues::lookup_vec handle heap

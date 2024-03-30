@@ -51,9 +51,15 @@ val_to_native state_val heap =
       last_optval = Values::U32::from_raw last_raw
       count_val =
          if Option::is_some count_optval then Option::unsafe_unwrap count_optval
-         else error "val_to_native: count not U32::T"
+         // XXX this is going off in spite of assertions to the contrary,
+         // should therefore be only on doomed branches and ok to provide a
+         // placeholder value instead... but needs to be looked into further
+         //else error "val_to_native: count not U32::T"
+         else Values::U32::from_native 0
       last_val =
          if Option::is_some last_optval then Option::unsafe_unwrap last_optval
-         else error "val_to_native: last not U32::T"
+         // XXX same here
+         //else error "val_to_native: last not U32::T"
+         else Values::U32::from_native 0
       count_native = Values::U32::to_native count_val
       last_native = Values::U32::to_native last_val

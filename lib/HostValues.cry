@@ -93,8 +93,9 @@ invalid_string_representation = ()
  *
  * XXX we should come up with some shorter names here
  */
+type VecData = Array [32] RawRawVal
 newtype VecRepresentation = {
-   data: Array [32] RawRawVal,
+   data: VecData,
    size: [32]
 }
 
@@ -217,7 +218,11 @@ private
       types: Array Handle TypeTag,
       values_u64: Array Handle [64],
       values_string: Array Handle StringRepresentation,
-      values_vec: Array Handle VecRepresentation,
+      // Can't do this (saw-script #1988)
+      //values_vec: Array Handle VecRepresentation,
+      // Instead make a pair of arrays
+      values_vecdata: Array Handle VecData,
+      values_vecsize: Array Handle [32],
       next: Handle
    }
 
@@ -256,7 +261,8 @@ alloc_u64 n s = (s', handle)
          types = types',
          values_u64 = values_u64',
          values_string = s.values_string,
-         values_vec = s.values_vec,
+         values_vecdata = s.values_vecdata,
+         values_vecsize = s.values_vecsize,
          next = s.next + 1
       }
 
@@ -271,7 +277,8 @@ alloc_string rep s = (s', handle)
          types = types',
          values_u64 = s.values_u64,
          values_string = values_string',
-         values_vec = s.values_vec,
+         values_vecdata = s.values_vecdata,
+         values_vecsize = s.values_vecsize,
          next = s.next + 1
       }
 
@@ -281,12 +288,15 @@ alloc_vec rep s = (s', handle)
    where
       handle = s.next
       types' = arrayUpdate s.types handle TagVec
-      values_vec' = arrayUpdate s.values_vec handle rep
+      //values_vec' = arrayUpdate s.values_vec handle rep
+      values_vecdata' = arrayUpdate s.values_vecdata handle rep.data
+      values_vecsize' = arrayUpdate s.values_vecsize handle rep.size
       s' = HostHeap {
          types = types',
          values_u64 = s.values_u64,
          values_string = s.values_string,
-         values_vec = values_vec',
+         values_vecdata = values_vecdata',
+         values_vecsize = values_vecsize',
          next = s.next + 1
       }
 
@@ -340,5 +350,10 @@ lookup_vec h s =
 //      _ -> Option::none' invalid_vec_representation
    if h > s.next then Option::none' invalid_vec_representation
    | arrayLookup s.types h != TagVec then Option::none' invalid_vec_representation
-   else Option::some (arrayLookup s.values_vec h)
-
+   else
+      Option::some rep
+      where
+         data = arrayLookup s.values_vecdata h
+         size = arrayLookup s.values_vecsize h
+         //rep = arrayLookup s.values_vec h
+         rep = VecRepresentation { data = data, size = size }

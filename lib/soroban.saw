@@ -749,7 +749,7 @@ let vec_len_spec (smi : SorobanMIRItems) = do {
 
    // get a host heap, which has a mapping for the VecObject
    heap <- mir_fresh_cryptol_var "values.vec_len.heap" {| Values::HostHeap |};
-   mir_assert {{ Values::vecobj_exists v heap }};
+   mir_assert {{ Values::vecobj_valid_with_heap v heap }};
    soroban_hostheap_assert_state heap;
 
    // get the length
@@ -786,7 +786,7 @@ let vec_get_spec (smi : SorobanMIRItems) = do {
 
    // get a host heap, which has a mapping for the VecObject
    heap <- mir_fresh_cryptol_var "values.vec_get.heap" {| Values::HostHeap |};
-   mir_assert {{ Values::vecobj_exists v heap }};
+   mir_assert {{ Values::vecobj_valid_with_heap v heap }};
    soroban_hostheap_assert_state heap;
 
    // get the length, check bounds requirement
@@ -876,8 +876,43 @@ let vec_get_spec (smi : SorobanMIRItems) = do {
  *
  * vec_push_back(env: Env, v: VecObject, x: RawVal) : VecObject
  */
-//let vec_push_back_spec (smi : SorobanMIRItems) = do {
-//};
+let vec_push_back_spec (smi : SorobanMIRItems) = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get a previous vector (first argument)
+   v <- soroban_value_fresh "values.vec_push_back.v" {| Values::VecObjectT |};
+   let mir_v = soroban_value_to_mir smi v;
+
+   // get a value to add (second argument)
+   x <- soroban_value_fresh "values.vec_push_back.x" {| Values::RawT |};
+   let mir_x = soroban_value_to_mir smi x;
+
+   // get a host heap, which has a mapping for the VecObject
+   heap <- mir_fresh_cryptol_var "values.vec_push_back.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::vecobj_valid_with_heap v heap }};
+   soroban_hostheap_assert_state heap;
+
+   // call the function
+   mir_execute_func [self, mir_v, mir_x];
+
+   // allocate in the model
+   let heap'v = {{ Values::vecobj_addtail v x heap }};
+   let heap' = {{ heap'v.0 }};
+   let v = {{ heap'v.1 }};
+
+   // update the heap
+   soroban_hostheap_assert_state heap';
+
+   // return the new object handle
+   // XXX share this logic with return_ok (which is currently below and
+   // needs to be moved up)
+   let rettype = soroban_value_type_to_mir smi (type v);
+   let mir_v = soroban_value_to_mir smi v;
+   let ok = mir_enum_value (smi.ResultInfallibleType rettype) "Ok" [mir_v];
+   mir_return ok;
+};
 
 /*
  * Remove the value at the end. Vector must not be empty.
@@ -1108,6 +1143,16 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       else
          return [];
    };
+   vec_push_back_overrides <- do {
+      if string_list.elem "vec_push_back" features then do {
+         spec <- mir_unsafe_assume_spec mod
+            "soroban_sdk::env::{impl#12}::vec_push_back"
+            (vec_push_back_spec smi);
+         return [spec];
+      }
+      else
+         return [];
+   };
    vec_new_from_slice_overrides <- do {
       if string_list.elem "vec_new_from_slice" features then do {
          let make (n : Int) : TopLevel MIRSpec = do {
@@ -1135,6 +1180,7 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       vec_new_overrides,
       vec_len_overrides,
       vec_get_overrides,
+      vec_push_back_overrides,
       vec_new_from_slice_overrides
    ]);
 };

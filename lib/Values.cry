@@ -865,6 +865,13 @@ submodule VecObject where
    eq: T -> T -> HostValues::Heap -> Bool
    eq vs1 vs2 heap = full_eq vs1.val vs2.val heap
 
+   // allocating modifications
+   addtail: T -> Val -> HostValues::Heap -> (HostValues::Heap, T)
+   addtail v x heap = from_vecrep rep' heap
+      where
+         rep = getrep v heap
+         rep' = HostValues::vec_representation_addtail rep (rawraw_of_val x)
+
 
 ////////////////////////////////////////////////////////////
 // mapobject
@@ -941,6 +948,7 @@ vecobj_seq = VecObject::seq
 vecobj_len = VecObject::len
 vecobj_get = VecObject::get
 vecobj_eq = VecObject::eq
+vecobj_addtail = VecObject::addtail
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

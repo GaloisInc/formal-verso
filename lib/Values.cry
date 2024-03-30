@@ -807,13 +807,13 @@ submodule VecObject where
    from_vecrep rep state = (state', from_handle handle)
       where (state', handle) = HostValues::alloc_vec rep state
 
-   singleton: Val -> HostValues::Heap -> (HostValues::Heap, T)
-   singleton v state = from_vecrep rep state
-      where rep = HostValues::vec_representation_singleton (rawraw_of_val v)
-
    empty: HostValues::Heap -> (HostValues::Heap, T)
    empty state = from_vecrep rep state
       where rep = HostValues::vec_representation_empty
+
+   singleton: Val -> HostValues::Heap -> (HostValues::Heap, T)
+   singleton v state = from_vecrep rep state
+      where rep = HostValues::vec_representation_singleton (rawraw_of_val v)
 
    pair: Val -> Val -> HostValues::Heap -> (HostValues::Heap, T)
    pair v w state = from_vecrep rep state

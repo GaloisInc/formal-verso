@@ -277,7 +277,18 @@ private
            where
               handle1 = major_of_val v1
               handle2 = major_of_val v2
-      //| tag1 == tag_mapobject  // XXX notyet, not implemented
+      | tag1 == tag_mapobject then
+           if handle1 == handle2 then True
+           | HostValues::present_as_map handle1 heap == False then False
+           | HostValues::present_as_map handle2 heap == False then False
+           else
+              HostValues::map_representation_equiv rawraw_eq rep1 rep2 heap
+              where
+                 rep1 = Option::crashing_unwrap (HostValues::lookup_map handle1 heap)
+                 rep2 = Option::crashing_unwrap (HostValues::lookup_map handle2 heap)
+           where
+              handle1 = major_of_val v1
+              handle2 = major_of_val v2
       else False
       where
          tag1 = tag_of_val v1
@@ -392,10 +403,11 @@ submodule Raw where
        | tag == tag_u32val then minor_of_val v == 0
        | tag == tag_i32val then minor_of_val v == 0
        | tag == tag_symbolsmall then smallsym_body_valid (body_of_val v)
-       | tag == tag_symbolobject \/
-         tag == tag_mapobject then
+       | tag == tag_symbolobject then
             /* XXX notyet */
-            error "Cannot interpret symbol/map objects yet"
+            error "Cannot interpret symbol objects yet"
+       | tag == tag_mapobject then
+            minor_of_val v == 0
        else False
       where tag = tag_of_val v
 
@@ -878,7 +890,91 @@ submodule VecObject where
 // mapobject
 // val.rs line 331
 
-// TBD
+submodule MapObject where
+   newtype T = { val : Val }
+
+   valid' : Val -> Bool
+   valid' v = tag_of_val v == tag_mapobject /\ minor_of_val v == 0
+
+   valid : T -> Bool
+   valid m = valid' m.val
+
+   // note: call plain valid first
+   valid_with_heap : T -> HostValues::Heap -> Bool
+   valid_with_heap m heap = HostValues::present_as_map handle heap
+      where handle = major_of_val m.val
+
+   to_raw : T -> Val
+   to_raw m = m.val
+
+   from_raw : Val -> Option::T T
+   from_raw v =
+      if valid' v then Option::some (T { val = v })
+      else Option::none' (T { val = badval })
+
+   from_handle : [32] -> T
+   from_handle handle = T { val = val_of_major_minor_tag handle 0 tag_mapobject }
+
+   // XXX: this should not exist, but for the time being we need it to
+   // live in the None case of Option::T and similar circumstances.
+   // When we can use Cryptol sums and the real Option type, it should
+   // go away.
+   invalid : T
+   invalid = T {val = badval }
+
+   // allocating constructors
+
+   from_maprep : HostValues::MapRepresentation -> HostValues::Heap -> (HostValues::Heap, T)
+   from_maprep rep heap = (heap', from_handle handle)
+      where (heap', handle) = HostValues::alloc_map rep heap
+
+   empty: HostValues::Heap -> (HostValues::Heap, T)
+   empty heap = from_maprep rep heap
+      where rep = HostValues::map_representation_empty
+
+   singleton: Val -> Val -> HostValues::Heap -> (HostValues::Heap, T)
+   singleton k v heap = from_maprep rep heap
+      where
+         k' = rawraw_of_val k
+         v' = rawraw_of_val v
+         rep = HostValues::map_representation_singleton k' v'
+
+   pair: Val -> Val -> Val -> Val -> HostValues::Heap -> (HostValues::Heap, T)
+   pair k1 v1 k2 v2 heap = from_maprep rep heap
+      where
+         k1' = rawraw_of_val k1
+         v1' = rawraw_of_val v1
+         k2' = rawraw_of_val k2
+         v2' = rawraw_of_val v2
+         rep = HostValues::map_representation_pair k1' v1' k2' v2'
+
+   // lookups
+   // these will all misbehave on nonexistent values; use valid_with_heap first
+   // (XXX: using Option::crashing_unwrap crashes... look into why)
+   getrep: T -> HostValues::Heap -> HostValues::MapRepresentation
+   getrep m heap = Option::unsafe_unwrap optval
+      where
+         handle = major_of_val m.val
+         optval = HostValues::lookup_map handle heap
+
+   // check if there's a value for key k
+   has_key: Val -> T -> HostValues::Heap -> Bool
+   has_key k m heap = HostValues::map_representation_has_key (rawraw_of_val k) rep
+      where rep = getrep m heap
+
+   // get the value for key k; return unit if not found
+   get: Val -> T -> HostValues::Heap -> Val
+   get k m heap = val_of_rawraw rawraw
+      where
+         rep = getrep m heap
+         dfl = rawraw_of_val (Void::to_raw unit)
+         rawraw = HostValues::map_representation_get_default (rawraw_of_val k) rep dfl
+
+   // defer equality to raw to avoid duplication (since full_eq needs
+   // to be recursive)
+   eq: T -> T -> HostValues::Heap -> Bool
+   eq vs1 vs2 heap = full_eq vs1.val vs2.val heap
+
 
 ////////////////////////////////////////////////////////////
 // addressobject
@@ -899,6 +995,7 @@ type U32T = U32::T
 type StringObjectT = StringObject::T
 type SymbolT = Symbol::T
 type VecObjectT = VecObject::T
+type MapObjectT = MapObject::T
 type RawT = Raw::T
 
 void_valid = Void::valid
@@ -950,6 +1047,17 @@ vecobj_len = VecObject::len
 vecobj_get = VecObject::get
 vecobj_eq = VecObject::eq
 vecobj_addtail = VecObject::addtail
+
+mapobj_valid = MapObject::valid
+mapobj_valid_with_heap = MapObject::valid_with_heap
+mapobj_from_raw = MapObject::from_raw
+mapobj_to_raw = MapObject::to_raw
+mapobj_invalid = MapObject::invalid
+mapobj_empty = MapObject::empty
+mapobj_singleton = MapObject::singleton
+mapobj_pair = MapObject::pair
+mapobj_has_key = MapObject::has_key
+mapobj_get = MapObject::get
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

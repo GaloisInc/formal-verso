@@ -47,6 +47,7 @@ typedef SorobanMIRItems = {
    StringObjectType : (() -> MIRAdt),
    SymbolValType : (() -> MIRAdt),
    VecObjectType : (() -> MIRAdt),
+   MapObjectType : (() -> MIRAdt),
    RawValType : (() -> MIRAdt)
 };
 
@@ -111,6 +112,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
    let StringObjectType = find_adt_when "str_val" "soroban_env_common::string::StringObject" in
    let SymbolValType = find_adt_when "symbol" "soroban_env_common::symbol::Symbol" in
    let VecObjectType = find_adt_when "vec_val" "soroban_env_common::raw_val::VecObject" in
+   let MapObjectType = find_adt_when "map_val" "soroban_env_common::raw_val::MapObject" in
    let RawValType = find_adt "soroban_env_common::raw_val::RawVal" in
 
    {
@@ -139,6 +141,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
       StringObjectType = StringObjectType,
       SymbolValType = SymbolValType,
       VecObjectType = VecObjectType,
+      MapObjectType = MapObjectType,
       RawValType = RawValType
    };
 
@@ -201,6 +204,8 @@ let soroban_value_valid (t : Type) : Term =
       {{ Values::symbol_valid }}
    else if type_eq t {| Values::VecObjectT |} then
       {{ Values::vecobject_valid }}
+   else if type_eq t {| Values::MapObjectT |} then
+      {{ Values::mapobj_valid }}
    else if type_eq t {| Values::RawT |} then
       {{ Values::raw_valid }}
    else if type_eq t {| Store::T |} then
@@ -293,6 +298,8 @@ let soroban_value_to_raw (t : Type) : Term =
       {{ Values::symbol_to_raw }}
    else if type_eq t {| Values::VecObjectT |} then
       {{ Values::vecobj_to_raw }}
+   else if type_eq t {| Values::MapObjectT |} then
+      {{ Values::mapobj_to_raw }}
    else
       run (fail (str_concat (show t) " cannot be converted to Raw"));
 
@@ -321,6 +328,8 @@ let soroban_value_from_raw (t : Type) : Term =
       {{ Values::symbol_from_raw }}
    else if type_eq t {| Values::VecObjectT |} then
       {{ Values::vecobject_from_raw }}
+   else if type_eq t {| Values::MapObjectT |} then
+      {{ Values::mapobj_from_raw }}
    else
       run (fail (str_concat (show t) " cannot be converted from Raw"));
 
@@ -342,6 +351,8 @@ let soroban_value_type_to_mir (smi : SorobanMIRItems) t =
       mir_adt (smi.SymbolType ())
    else if type_eq t {| Values::VecObjectT |} then
       mir_adt (smi.VecObjectType ())
+   else if type_eq t {| Values::MapObjectT |} then
+      mir_adt (smi.MapObjectType ())
    else if type_eq t {| Values::RawT |} then
       mir_adt (smi.RawValType ())
    else
@@ -426,6 +437,10 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
        */
       mir_struct_value (smi.VecObjectType ()) [
          soroban_value_to_mir smi {{ Values::vecobject_to_raw x }}
+      ]
+   else if type_eq t {| Values::MapObjectT |} then
+      mir_struct_value (smi.MapObjectType ()) [
+         soroban_value_to_mir smi {{ Values::mapobj_to_raw x }}
       ]
    else if type_eq t {| Values::RawT |} then
       mir_struct_value (smi.RawValType ()) [
@@ -570,6 +585,30 @@ let soroban_value_vecobj_5 val1 val2 val3 val4 val5 heap = do {
    let val4_raw = {{ val4_to_raw val4 }};
    let val5_raw = {{ val5_to_raw val5 }};
    return {{ Values::vecobj_quint val1_raw val2_raw val3_raw val4_raw val5_raw heap }};
+};
+
+let soroban_value_mapobj_0 heap = do {
+   return {{ Values::mapobj_empty heap }};
+};
+
+let soroban_value_mapobj_1 k v heap = do {
+   let k_to_raw = soroban_value_to_raw (type k);
+   let k_raw = {{ k_to_raw k }};
+   let v_to_raw = soroban_value_to_raw (type v);
+   let v_raw = {{ k_to_raw v }};
+   return {{ Values::mapobj_singleton k_raw v_raw heap }};
+};
+
+let soroban_value_mapobj_2 k1 v1 k2 v2 heap = do {
+   let k1_to_raw = soroban_value_to_raw (type k1);
+   let k1_raw = {{ k_to_raw k1 }};
+   let v1_to_raw = soroban_value_to_raw (type v1);
+   let v1_raw = {{ k_to_raw v1 }};
+   let k2_to_raw = soroban_value_to_raw (type k2);
+   let k2_raw = {{ k_to_raw k2 }};
+   let v2_to_raw = soroban_value_to_raw (type v2);
+   let v2_raw = {{ k_to_raw v2 }};
+   return {{ Values::mapobj_pair k1_raw v1_raw k2_raw v2_raw heap }};
 };
 
 

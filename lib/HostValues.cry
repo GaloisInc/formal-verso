@@ -73,6 +73,10 @@ type RawRawVal = [64]
 //type T = HostVal
 type Heap = HostHeap
 
+
+////////////////////////////////////////////////////////////
+// string representation
+
 /*
  * Because for the moment we don't need to track the actual strings,
  * I'm going to start off with a null/dummy string representation.
@@ -86,6 +90,8 @@ invalid_string_representation : StringRepresentation
 invalid_string_representation = ()
 
 
+////////////////////////////////////////////////////////////
+// vector representation
 
 /*
  * Vectors map 32-bit indexes to 64-bit unwrapped raw values.
@@ -183,6 +189,71 @@ vec_representation_addtail rep v =
       data' = arrayUpdate rep.data rep.size v
       size' = rep.size + 1
 
+
+////////////////////////////////////////////////////////////
+// map representation
+
+/*
+ * Maps map 64-bit unwrapped raw keys to 64-bit unwrapped raw values.
+ * Values.cry rewraps those values as needed.
+ */
+
+type MapHere = Array RawRawVal Bool
+type MapData = Array RawRawVal RawRawVal
+newtype MapRepresentation = {
+   here: MapHere,
+   data: MapData
+}
+
+map_representation_empty: MapRepresentation
+map_representation_empty =
+   MapRepresentation { here = arrayConstant False, data = arrayConstant 0 }
+
+map_representation_add: RawRawVal -> RawRawVal -> MapRepresentation -> MapRepresentation
+map_representation_add k v rep =
+   MapRepresentation { here = here', data = data' }
+   where
+      here' = arrayUpdate rep.here k True
+      data' = arrayUpdate rep.data k v
+
+/* Singleton */
+map_representation_singleton: RawRawVal -> RawRawVal -> MapRepresentation
+map_representation_singleton k v =
+   map_representation_add k v map_representation_empty
+
+/* Pair */
+map_representation_pair: RawRawVal -> RawRawVal -> RawRawVal -> RawRawVal -> MapRepresentation
+map_representation_pair k1 v1 k2 v2 =
+   map_representation_add k2 v2 (map_representation_singleton k1 v1)
+
+/* Map used when an invalid/error version is needed */
+invalid_map_representation : MapRepresentation
+invalid_map_representation = map_representation_empty
+
+/* check if k is present */
+map_representation_has_key : RawRawVal -> MapRepresentation -> Bool
+map_representation_has_key k rep =
+   arrayLookup rep.here k
+
+/* get value for k, or return default value if not present */
+map_representation_get_default : RawRawVal -> MapRepresentation -> RawRawVal -> RawRawVal
+map_representation_get_default k rep dfl =
+   if arrayLookup rep.here k == False then dfl
+   else arrayLookup rep.data k
+
+/* test contents for equivalence */
+map_representation_equiv :
+       (RawRawVal -> RawRawVal -> Heap -> Bool) ->
+       MapRepresentation -> MapRepresentation -> Heap ->
+       Bool
+map_representation_equiv _subcmp _rep1 _rep2 _heap =
+   // XXX notyet
+   error "map_representation_equiv: not yet implemented"
+
+
+////////////////////////////////////////////////////////////
+// heap
+
 private
    /*
     * The supported types of host-side values are:
@@ -211,7 +282,7 @@ private
    TagU64 = 0
    TagString = 1
    TagVec = 2
-   _TagRubbish = 3
+   TagMap = 3
 
    newtype HostHeap = {
       //values: Array Handle HostVal,
@@ -223,6 +294,8 @@ private
       // Instead make a pair of arrays
       values_vecdata: Array Handle VecData,
       values_vecsize: Array Handle [32],
+      values_maphere: Array Handle MapHere,
+      values_mapdata: Array Handle MapData,
       next: Handle
    }
 
@@ -263,6 +336,8 @@ alloc_u64 n s = (s', handle)
          values_string = s.values_string,
          values_vecdata = s.values_vecdata,
          values_vecsize = s.values_vecsize,
+         values_maphere = s.values_maphere,
+         values_mapdata = s.values_mapdata,
          next = s.next + 1
       }
 
@@ -279,6 +354,8 @@ alloc_string rep s = (s', handle)
          values_string = values_string',
          values_vecdata = s.values_vecdata,
          values_vecsize = s.values_vecsize,
+         values_maphere = s.values_maphere,
+         values_mapdata = s.values_mapdata,
          next = s.next + 1
       }
 
@@ -297,6 +374,27 @@ alloc_vec rep s = (s', handle)
          values_string = s.values_string,
          values_vecdata = values_vecdata',
          values_vecsize = values_vecsize',
+         values_maphere = s.values_maphere,
+         values_mapdata = s.values_mapdata,
+         next = s.next + 1
+      }
+
+alloc_map : MapRepresentation -> Heap -> (Heap, Handle)
+//alloc_map rep s = alloc (HostMap rep) s
+alloc_map rep s = (s', handle)
+   where
+      handle = s.next
+      types' = arrayUpdate s.types handle TagMap
+      values_maphere' = arrayUpdate s.values_maphere handle rep.here
+      values_mapdata' = arrayUpdate s.values_mapdata handle rep.data
+      s' = HostHeap {
+         types = types',
+         values_u64 = s.values_u64,
+         values_string = s.values_string,
+         values_vecdata = s.values_vecdata,
+         values_vecsize = s.values_vecsize,
+         values_maphere = values_maphere',
+         values_mapdata = values_mapdata',
          next = s.next + 1
       }
 
@@ -320,6 +418,12 @@ present_as_vec : Handle -> Heap -> Bool
 present_as_vec h s =
    if h > s.next then False
    | arrayLookup s.types h != TagVec then False
+   else True
+
+present_as_map : Handle -> Heap -> Bool
+present_as_map h s =
+   if h > s.next then False
+   | arrayLookup s.types h != TagMap then False
    else True
 
 lookup_u64 : Handle -> Heap -> Option::T [64]
@@ -357,3 +461,18 @@ lookup_vec h s =
          size = arrayLookup s.values_vecsize h
          //rep = arrayLookup s.values_vec h
          rep = VecRepresentation { data = data, size = size }
+
+lookup_map : Handle -> Heap -> Option::T MapRepresentation
+lookup_map h s =
+//   /* ugh we really need a better Option */
+//   case Option::unwrap_or (lookup h s) HostInvalid of
+//      HostMap rep -> Option::some rep
+//      _ -> Option::none' invalid_map_representation
+   if h > s.next then Option::none' invalid_map_representation
+   | arrayLookup s.types h != TagMap then Option::none' invalid_map_representation
+   else
+      Option::some rep
+      where
+         here = arrayLookup s.values_maphere h
+         data = arrayLookup s.values_mapdata h
+         rep = MapRepresentation { here = here, data = data }

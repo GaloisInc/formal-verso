@@ -22,7 +22,7 @@ let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
  *
  * The native representation is a pair {| ([32], [32]) |}.
  *
- * The Soroban-level representation is a Values::VecObject::T that
+ * The Soroban-level representation is a Values::MapObject::T that
  * points to two Values::U32::T.
  */
 
@@ -42,8 +42,8 @@ let custom_fresh_native name = do {
 /*
  * Shared logic to establish a precondition where:
  *    - there is not necessarily a value in the storage
- *    - if there is, it's a VecObject::T
- *         - which points to a vector representation in the host heap
+ *    - if there is, it's a MapObject::T
+ *         - which points to a map representation in the host heap
  *         - and which is a valid representation of the custom type
  *
  * Takes a host heap, a store, and a fresh native representation of
@@ -54,10 +54,10 @@ let assert_storage_precond heap store state_native = do {
    // First, check if a state value is set. This controls a bunch of the other logic.
    let has = soroban_store_has store COUNTER;
 
-   // Get value in the store at COUNTER as an Option::T (Option::T (Values::VecObject::T))
+   // Get value in the store at COUNTER as an Option::T (Option::T (Values::MapObject::T))
    // outer None means there was no value
    // inner None means the value wasn't the right type
-   let state_optopt_val = soroban_store_get store COUNTER {| Values::VecObjectT |};
+   let state_optopt_val = soroban_store_get store COUNTER {| Values::MapObjectT |};
 
    // First assert that if we have a value in the store, it's the right type
    // (that is, state_optopt_val's inner Option::T is not None)
@@ -73,13 +73,13 @@ let assert_storage_precond heap store state_native = do {
 
    // It is now safe to unwrap both Option::T to get the value. If we
    // didn't have a value, use a placeholder. Don't allocate a new
-   // VecObject to hold the default value, as in the contract code the
-   // custom type value doesn't get converted into a VecObject (and
+   // MapObject to hold the default value, as in the contract code the
+   // custom type value doesn't get converted into a MapObject (and
    // thus allocated) until something happens that converts it to an
    // SDK value.
    //
 
-   // For the placeholder, use Values::VecObject::invalid so it's the
+   // For the placeholder, use Values::MapObject::invalid so it's the
    // right type. This value ought not to exist, really. Note that the
    // reason we need it and the reason all this stuff is structured in
    // this somewhat strange way is that SAW doesn't let us use
@@ -91,20 +91,21 @@ let assert_storage_precond heap store state_native = do {
       if has then
          Option::unsafe_unwrap (Option::unsafe_unwrap state_optopt_val)
       else
-         Values::vecobj_invalid
+         Values::mapobj_invalid
    }};
 
-   // Now assert that the VecObject we got (if we got one) points to
-   // a vector in the host heap.
+   // Now assert that the MapObject we got (if we got one) points to
+   // a map in the host heap.
    let cond_2 = {{
       if has then
-         Values::vecobj_valid_with_heap state_val heap
+         Values::mapobj_valid_with_heap state_val heap
       else True
    }};
    mir_assert {{ cond_2 }};
 
-   // Assert that the value (if we got one) has the right VecObject
-   // representation: two entries, both Values::U32::T.
+   // Assert that the value (if we got one) has the right MapObject
+   // representation: two entries, names are "count" and "last_incr",
+   // both Values::U32::T.
    let cond_3 = {{
       if has then Custom::valid_with_heap state_val heap
       else True
@@ -112,11 +113,11 @@ let assert_storage_precond heap store state_native = do {
    mir_assert {{ cond_3 }};
 
    // Now assert that the passed-in fresh state value is equal to
-   // either the decoded VecObject or the default value.
+   // either the decoded MapObject or the default value.
    //
    // Note that if there are host-stored objects in the type one in
-   // general needs to use Value::VecObject::eq instead so that the
-   // host references are followed.
+   // general needs to use Value::MapObject::eq instead of ordinary
+   // equality so that the host references are followed.
    let cond_4 = {{
       if has then
          state_native == Custom::val_to_native state_val heap
@@ -196,8 +197,8 @@ let increment_spec = do {
   let count_val' = {{ Values::u32_of_native count_native' }};
   let last_val' = {{ Values::u32_of_native last_native' }};
 
-  // allocate a new VecObject
-  let state_val'heap' = soroban_value_vecobj_2 count_val' last_val' heap;
+  // allocate a new MapObject
+  let state_val'heap' = soroban_value_mapobj_2 {{ countsym }} count_val' {{ lastsym }} last_val' heap;
   let state_val' = {{ stateval'heap'.0 }};
   let heap' = {{ stateval'heap'.1 }};
 

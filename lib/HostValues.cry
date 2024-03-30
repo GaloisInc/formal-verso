@@ -195,15 +195,10 @@ private
     *    - maps
     *    - addresses
     *
-    * of which we currently only provide u64 and vector, and I'm only
-    * adding u64 as well as vector right now so there's more than one
-    * cases.
-    *
-    * Note that you can't manipulate Cryptol enums very much in SAW
-    * (yet), but that's ok; we shouldn't have to.
+    * of which we currently only provide u64, string, and vector.
     *
     * It would be better not to need HostInvalid but until we have
-    * a better Option.cry we need something to stuff in failures.
+    * a better Option.cry we need a value to stuff in failures.
     */
 /* apparently we can't have this at all, even if SAW never sees it
    enum HostVal =

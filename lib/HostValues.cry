@@ -404,25 +404,25 @@ alloc_map rep s = (s', handle)
 
 present_as_u64 : Handle -> Heap -> Bool
 present_as_u64 h s =
-   if h > s.next then False
+   if h >= s.next then False
    | arrayLookup s.types h != TagU64 then False
    else True
 
 present_as_string : Handle -> Heap -> Bool
 present_as_string h s =
-   if h > s.next then False
+   if h >= s.next then False
    | arrayLookup s.types h != TagString then False
    else True
 
 present_as_vec : Handle -> Heap -> Bool
 present_as_vec h s =
-   if h > s.next then False
+   if h >= s.next then False
    | arrayLookup s.types h != TagVec then False
    else True
 
 present_as_map : Handle -> Heap -> Bool
 present_as_map h s =
-   if h > s.next then False
+   if h >= s.next then False
    | arrayLookup s.types h != TagMap then False
    else True
 
@@ -432,7 +432,7 @@ lookup_u64 h s =
 //   case Option::unwrap_or (lookup h s) HostInvalid of
 //      HostU64 n -> Option::some n
 //      _ -> Option::none' 0
-   if h > s.next then Option::none' 0
+   if h >= s.next then Option::none' 0
    | arrayLookup s.types h != TagU64 then Option::none' 0
    else Option::some (arrayLookup s.values_u64 h)
 
@@ -442,7 +442,7 @@ lookup_string h s =
 //   case Option::unwrap_or (lookup h s) HostInvalid of
 //      HostString n -> Option::some n
 //      _ -> Option::none' 0
-   if h > s.next then Option::none' invalid_string_representation
+   if h >= s.next then Option::none' invalid_string_representation
    | arrayLookup s.types h != TagString then Option::none' invalid_string_representation
    else Option::some (arrayLookup s.values_string h)
 
@@ -452,7 +452,7 @@ lookup_vec h s =
 //   case Option::unwrap_or (lookup h s) HostInvalid of
 //      HostVec rep -> Option::some rep
 //      _ -> Option::none' invalid_vec_representation
-   if h > s.next then Option::none' invalid_vec_representation
+   if h >= s.next then Option::none' invalid_vec_representation
    | arrayLookup s.types h != TagVec then Option::none' invalid_vec_representation
    else
       Option::some rep
@@ -468,7 +468,7 @@ lookup_map h s =
 //   case Option::unwrap_or (lookup h s) HostInvalid of
 //      HostMap rep -> Option::some rep
 //      _ -> Option::none' invalid_map_representation
-   if h > s.next then Option::none' invalid_map_representation
+   if h >= s.next then Option::none' invalid_map_representation
    | arrayLookup s.types h != TagMap then Option::none' invalid_map_representation
    else
       Option::some rep

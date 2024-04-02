@@ -1526,7 +1526,8 @@ let log_fmt_values_spec (smi : SorobanMIRItems) = do {
    soroban_hostheap_assert_state heap;
    soroban_logging_assert_state log';
 
-   // function returns Rust void (I think)
+   // Return the SDK void value.
+   return_ok smi {{ Values::unit }};
 };
 
 /*
@@ -1950,6 +1951,7 @@ let soroban_init (mod : MIRModule) (features : [String]) : TopLevel SorobanAPI =
       if string_list.elem x feats then concat [y] feats else feats;
 
    let features = list.foldl feat_implies features [
+      ("logging", "void_val"),
       ("storage", "bool_val"),
       ("storage", "void_val"),
       ("symbol", "maybe_env")

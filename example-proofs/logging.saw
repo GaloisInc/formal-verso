@@ -20,6 +20,7 @@ let hello_spec = do {
 
   // Get a fresh symbolic heap
   heap <- mir_fresh_cryptol_var "heap" {| Values::HostHeap |};
+  mir_assert {{ Values::heap_has_space heap 3 }};
 
   // Declare a fresh symbolic log
   log <- mir_fresh_cryptol_var "log" {| Log::T |};

@@ -300,6 +300,14 @@ private
    }
 
 
+/*
+ * Assert that the heap can allocate at least as many more objects as
+ * "headroom". If adding in headroom makes the value smaller, the
+ * value overflowed.
+ */
+heap_has_space : Heap -> [32] -> Bool
+heap_has_space h headroom = h.next + headroom >= h.next
+
 empty_heap : Heap
 empty_heap =
    HostHeap {

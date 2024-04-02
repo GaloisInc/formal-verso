@@ -989,6 +989,9 @@ submodule MapObject where
 /* re-export HostValues::Heap because we need it in soroban.saw */
 type HostHeap = HostValues::Heap
 
+/* also need the heap space predicate */
+heap_has_space = HostValues::heap_has_space
+
 type VoidT = Void::T
 type BoolT = Bool::T
 type U32T = U32::T

@@ -639,8 +639,9 @@ let string_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () =
    ptr <- mir_alloc (mir_array n mir_u8);
    mir_points_to ptr (mir_term contents);
 
-   // get a host heap model
+   // get a host heap model with space to allocate at least once
    heap <- mir_fresh_cryptol_var "values.string_new_from_slice.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::heap_has_space heap 1 }};
 
    // bind the SDK state
    soroban_hostheap_assert_state heap;
@@ -681,8 +682,9 @@ let vec_new_empty_spec (smi : SorobanMIRItems) = do {
    self <- mir_alloc (mir_adt (smi.EnvType ()));
    mir_points_to self (smi.EnvVal ());
 
-   // get a host heap
+   // get a host heap with space to allocate at least once
    heap <- mir_fresh_cryptol_var "values.vec_new/empty.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::heap_has_space heap 1 }};
 
    // get the argument (the Soroban-level Void value, but as a RawVal)
    let arg_val = {{ Values::void_to_raw Values::unit }};
@@ -744,8 +746,9 @@ let vec_new_nonempty_spec (smi : SorobanMIRItems) = do {
    self <- mir_alloc (mir_adt (smi.EnvType ()));
    mir_points_to self (smi.EnvVal ());
 
-   // get a host heap
+   // get a host heap with space to allocate at least once
    heap <- mir_fresh_cryptol_var "values.vec_new/nonempty.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::heap_has_space heap 1 }};
 
    // get an argument
    n <- soroban_value_fresh "values.vec_new/nonempty.n" {| Values::U32T |};
@@ -938,8 +941,11 @@ let vec_push_back_spec (smi : SorobanMIRItems) = do {
    x <- soroban_value_fresh "values.vec_push_back.x" {| Values::RawT |};
    let mir_x = soroban_value_to_mir smi x;
 
-   // get a host heap, which has a mapping for the VecObject
+   // get a host heap with space to allocate at least once
    heap <- mir_fresh_cryptol_var "values.vec_push_back.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::heap_has_space heap 1 }};
+
+   // the heap must also have a mapping for the VecObject
    mir_assert {{ Values::vecobj_valid_with_heap v heap }};
 
    // bind the SDK state
@@ -1104,8 +1110,9 @@ let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do
    vals <- mir_alloc (mir_array n RawVal);
    mir_points_to vals mir_contents_array;
 
-   // get a host heap model
+   // get a host heap model with space to allocate at least once
    heap <- mir_fresh_cryptol_var "values.vec_new_from_slice.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::heap_has_space heap 1 }};
 
    // bind the SDK state
    soroban_hostheap_assert_state heap;
@@ -1508,7 +1515,7 @@ let log_fmt_values_spec (smi : SorobanMIRItems) = do {
    self <- mir_alloc (mir_adt (smi.EnvType ()));
    mir_points_to self (smi.EnvVal ());
 
-   // get a host heap
+   // get a host heap with space to allocate at least once
    heap <- mir_fresh_cryptol_var "log_fmt_values.heap" {| Values::HostHeap |};
 
    // get a fresh log

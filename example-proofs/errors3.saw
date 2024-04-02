@@ -60,6 +60,14 @@ let increment_spec = do {
   // Get a native bitvector version of the U32
   let counter_native = {{ Values::u32_to_native counter_val }};
 
+  // There's an implicit invariant on the counter state, which is that
+  // it is less than or equal to MAX. Make that invariant explicit.
+  // FUTURE: we ought to have a more principled way of handling
+  // invariants, especially across multiple functions accessing the
+  // same state, so they get automatically checked instead of having
+  // to be pasted all over the place.
+  mir_assert {{ counter_native <= MAX }};
+
   // Set store as the initial storage state
   soroban_storage_assert_state store;
 
@@ -83,6 +91,9 @@ let increment_spec = do {
 
   // Update the storage state.
   soroban_storage_assert_state store';
+
+  // Assert that we've maintained the invariant.
+  mir_assert {{ counter_native' <= MAX }};
 
   // On success the code returns the new value. It does so as a Rust
   // u32 (not U32Val) so convert counter_native' to MIR and wrap it in

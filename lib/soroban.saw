@@ -1126,6 +1126,9 @@ let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do
    let heap' = {{ heap'v.0 }};
    let v = {{ heap'v.1 }};
 
+   // rebind the SDK state
+   soroban_hostheap_assert_state heap';
+
    // return the new object handle
    // XXX share this logic with return_ok (which is currently below and
    // needs to be moved up)
@@ -1885,6 +1888,7 @@ let contract_event_spec (smi : SorobanMIRItems) = do {
    let topic_mir = soroban_value_to_mir smi topic;
 
    // get a fresh value
+   // XXX: we should assert it's valid
    val <- mir_fresh_cryptol_var "events.publish.val" {| Values::RawT |};
    let val_mir = soroban_value_to_mir smi val;
 

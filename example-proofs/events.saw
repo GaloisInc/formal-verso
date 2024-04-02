@@ -64,6 +64,9 @@ let increment_spec = do {
   // And get a fresh host heap.
   heap <- mir_fresh_cryptol_var "hostheap" {| Values::HostHeap |};
 
+  // The heap needs to be able to allocate at least once.
+  mir_assert {{ Values::heap_has_space heap 1 }};
+
   // Set the initial state:
   //    heap is the initial hostheap state
   //    store is the initial storage state

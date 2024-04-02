@@ -391,39 +391,39 @@ let soroban_value_type_to_mir (smi : SorobanMIRItems) t =
  *    - for Values::Raw::T, extract the bits of the representation
  *      and pass that to the Rust constructor.
  *
- * Note that for the latter case we need to fetch the bits
- * directly rather than calling the Cryptol-level accessor
- * function. Otherwise SAW loses track of the value when doing
- * override matching and the specs we produce don't work. See
- * saw-script #2035.
- *
- * For reasons I don't understand this seems to apply only to
- * the raw layer; the accessor functions for the wrapper types
- * seem to work ok.
+ * Note that we need to fetch the contents out directly rather than
+ * calling the Cryptol-level accessor function. Otherwise SAW loses
+ * track of the value when doing override matching and the specs we
+ * produce don't work. See saw-script #2035. XXX: this is ugly.
  */
 rec soroban_value_to_mir (smi : SorobanMIRItems) x =
    let t = type x in
    if type_eq t {| Values::VoidT |} then
       mir_struct_value (smi.VoidType ()) [
-         soroban_value_to_mir smi {{ Values::void_to_raw x }}
+         //soroban_value_to_mir smi {{ Values::void_to_raw x }}
+         soroban_value_to_mir smi {{ x.val }}
       ]
    else if type_eq t {| Values::BoolT |} then
       mir_struct_value (smi.BoolType ()) [
-         soroban_value_to_mir smi {{ Values::bool_to_raw x }}
+         //soroban_value_to_mir smi {{ Values::bool_to_raw x }}
+         soroban_value_to_mir smi {{ x.val }}
       ]
    else if type_eq t {| Values::U32T |} then
       mir_struct_value (smi.U32ValType ()) [
-         soroban_value_to_mir smi {{ Values::u32_to_raw x }}
+         //soroban_value_to_mir smi {{ Values::u32_to_raw x }}
+         soroban_value_to_mir smi {{ x.val }}
       ]
    else if type_eq t {| Values::StringObjectT |} then
       mir_struct_value (smi.StringObjectType ()) [
-         soroban_value_to_mir smi {{ Values::strobj_to_raw x }}
+         //soroban_value_to_mir smi {{ Values::strobj_to_raw x }}
+         soroban_value_to_mir smi {{ x.val }}
       ]
    else if type_eq t {| Values::SymbolT |} then
       mir_struct_value (smi.SymbolType ()) [
          smi.MaybeEnvVal (),
          mir_struct_value (smi.SymbolValType ()) [
-            soroban_value_to_mir smi {{ Values::symbol_to_raw x }}
+            //soroban_value_to_mir smi {{ Values::symbol_to_raw x }}
+            soroban_value_to_mir smi {{ x.val }}
          ]
       ]
    else if type_eq t {| Values::VecObjectT |} then
@@ -436,15 +436,16 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
        * upstream of MIR where we're working.
        */
       mir_struct_value (smi.VecObjectType ()) [
-         soroban_value_to_mir smi {{ Values::vecobject_to_raw x }}
+         //soroban_value_to_mir smi {{ Values::vecobject_to_raw x }}
+         soroban_value_to_mir smi {{ x.val }}
       ]
    else if type_eq t {| Values::MapObjectT |} then
       mir_struct_value (smi.MapObjectType ()) [
-         soroban_value_to_mir smi {{ Values::mapobj_to_raw x }}
+         //soroban_value_to_mir smi {{ Values::mapobj_to_raw x }}
+         soroban_value_to_mir smi {{ x.val }}
       ]
    else if type_eq t {| Values::RawT |} then
       mir_struct_value (smi.RawValType ()) [
-         // XXX: can't do this, it makes SAW unable to match specs
          //mir_term {{ Values::raw_get_payload x }}
          mir_term {{ x.bits }}
       ]

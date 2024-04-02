@@ -299,6 +299,20 @@ private
       next: Handle
    }
 
+
+empty_heap : Heap
+empty_heap =
+   HostHeap {
+      types = arrayConstant 0,
+      values_u64 = arrayConstant 0,
+      values_string = arrayConstant string_representation_dummy,
+      values_vecdata = arrayConstant (arrayConstant 0),
+      values_vecsize = arrayConstant 0,
+      values_maphere = arrayConstant (arrayConstant False),
+      values_mapdata = arrayConstant (arrayConstant 0),
+      next = 0
+   }
+
 /* this also doesn't work
    /*
     * Allocate a value and store it in the state.

@@ -641,6 +641,8 @@ let string_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () =
 
    // get a host heap model
    heap <- mir_fresh_cryptol_var "values.string_new_from_slice.heap" {| Values::HostHeap |};
+
+   // bind the SDK state
    soroban_hostheap_assert_state heap;
 
    // call the function, taking a slice reference to the string reference
@@ -681,11 +683,13 @@ let vec_new_empty_spec (smi : SorobanMIRItems) = do {
 
    // get a host heap
    heap <- mir_fresh_cryptol_var "values.vec_new/empty.heap" {| Values::HostHeap |};
-   soroban_hostheap_assert_state heap;
 
    // get the argument (the Soroban-level Void value, but as a RawVal)
    let arg_val = {{ Values::void_to_raw Values::unit }};
    let arg_mir = soroban_value_to_mir smi arg_val;
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
 
    // call the function
    mir_execute_func [self, arg_mir];
@@ -742,12 +746,14 @@ let vec_new_nonempty_spec (smi : SorobanMIRItems) = do {
 
    // get a host heap
    heap <- mir_fresh_cryptol_var "values.vec_new/nonempty.heap" {| Values::HostHeap |};
-   soroban_hostheap_assert_state heap;
 
    // get an argument
    n <- soroban_value_fresh "values.vec_new/nonempty.n" {| Values::U32T |};
    let native_n = {{ Values::u32_to_native n }};
    let mir_n = soroban_value_to_mir smi {{ Values::u32_to_raw n }};
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
 
    // call the function
    mir_execute_func [self, mir_n];
@@ -789,11 +795,13 @@ let vec_len_spec (smi : SorobanMIRItems) = do {
    // get a host heap, which has a mapping for the VecObject
    heap <- mir_fresh_cryptol_var "values.vec_len.heap" {| Values::HostHeap |};
    mir_assert {{ Values::vecobj_valid_with_heap v heap }};
-   soroban_hostheap_assert_state heap;
 
    // get the length
    let native_len = {{ Values::vecobj_len v heap }};
    let len = {{ Values::u32_from_native native_len }};
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
 
    // call the function
    mir_execute_func [self, mir_v];
@@ -826,7 +834,6 @@ let vec_get_spec (smi : SorobanMIRItems) = do {
    // get a host heap, which has a mapping for the VecObject
    heap <- mir_fresh_cryptol_var "values.vec_get.heap" {| Values::HostHeap |};
    mir_assert {{ Values::vecobj_valid_with_heap v heap }};
-   soroban_hostheap_assert_state heap;
 
    // get the length, check bounds requirement
    let native_len = {{ Values::vecobj_len v heap }};
@@ -835,6 +842,9 @@ let vec_get_spec (smi : SorobanMIRItems) = do {
    // get the value
    let ret = {{ Values::vecobj_get v i heap }};
    let mir_ret = soroban_value_to_mir smi ret;
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
 
    // call the function
    mir_execute_func [self, mir_v, mir_i];
@@ -931,6 +941,8 @@ let vec_push_back_spec (smi : SorobanMIRItems) = do {
    // get a host heap, which has a mapping for the VecObject
    heap <- mir_fresh_cryptol_var "values.vec_push_back.heap" {| Values::HostHeap |};
    mir_assert {{ Values::vecobj_valid_with_heap v heap }};
+
+   // bind the SDK state
    soroban_hostheap_assert_state heap;
 
    // call the function
@@ -1094,6 +1106,8 @@ let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do
 
    // get a host heap model
    heap <- mir_fresh_cryptol_var "values.vec_new_from_slice.heap" {| Values::HostHeap |};
+
+   // bind the SDK state
    soroban_hostheap_assert_state heap;
 
    // call the function, taking a slice reference to the array
@@ -1402,10 +1416,11 @@ let storage_put_spec (smi : SorobanMIRItems) = do {
    v <- soroban_value_fresh "storage.put.v" {| Values::RawT |};
    // XXX: should assert that k and v have valid type tags
 
-   soroban_storage_assert_state store;
-
    let k_val = soroban_value_to_mir smi k;
    let v_val = soroban_value_to_mir smi v;
+
+   soroban_storage_assert_state store;
+
    mir_execute_func [self, k_val, v_val];
 
    soroban_storage_assert_state {{ Store::set store k v }};

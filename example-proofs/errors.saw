@@ -33,7 +33,7 @@ let increment_spec_1 = do {
   mir_precond {{ has == False }};
 
   // Set store as the initial storage state
-  soroban_storage_update_state store;
+  soroban_storage_assert_state store;
 
   // Execute the function with an instance of Env
   mir_execute_func [soroban.smi.EnvVal ()];
@@ -44,7 +44,7 @@ let increment_spec_1 = do {
 
   // The final storage state should be the initial store updated to
   // counter_val' at COUNTER.
-  soroban_storage_update_state (soroban_store_set store COUNTER counter_val');
+  soroban_storage_assert_state (soroban_store_set store COUNTER counter_val');
 
   // The code returns the new value; it does so as a Rust u32 (not U32Val) so
   // convert counter_native' to MIR and wrap it in Ok.

@@ -107,41 +107,51 @@ newtype VecRepresentation = {
 
 /* Empty vector */
 vec_representation_empty : VecRepresentation
-vec_representation_empty = VecRepresentation { data = arrayConstant 0, size = 0 }
+vec_representation_empty =
+   VecRepresentation { data = arrayConstant 0, size = 0 }
 
 /* Singleton vector */
 vec_representation_singleton : RawRawVal -> VecRepresentation
-vec_representation_singleton n = VecRepresentation { data = arrayConstant n, size = 1 }
+vec_representation_singleton n =
+   VecRepresentation { data = arr, size = 1 }
+   where arr = arrayUpdate (arrayConstant 0) 0 n
 
 /* Pair */
 vec_representation_pair : RawRawVal -> RawRawVal -> VecRepresentation
 vec_representation_pair n m =
    VecRepresentation { data = arr, size = 2 }
-   where arr = arrayUpdate (arrayConstant m) (0 : [32]) n
+   where arr = arrayUpdate (arrayUpdate (arrayConstant 0) 0 n) 1 m
 
 /* Triple */
 vec_representation_triple : RawRawVal -> RawRawVal -> RawRawVal -> VecRepresentation
 vec_representation_triple n m o =
    VecRepresentation { data = arr, size = 3 }
-   where arr = arrayUpdate (arrayUpdate (arrayConstant o) 0 n) 1 m
+   where arr = arrayUpdate (arrayUpdate (arrayUpdate (arrayConstant 0) 0 n) 1 m) 2 o
 
 /* Quad */
 vec_representation_quad : RawRawVal -> RawRawVal -> RawRawVal -> RawRawVal -> VecRepresentation
 vec_representation_quad n m o p =
    VecRepresentation { data = arr, size = 4 }
-   where arr = arrayUpdate (arrayUpdate (arrayUpdate (arrayConstant p) 0 n) 1 m) 2 o
+   where arr = arrayUpdate (arrayUpdate (arrayUpdate (arrayUpdate (arrayConstant 0) 0 n) 1 m) 2 o) 3 p
 
 /* Quint */
 vec_representation_quint : RawRawVal -> RawRawVal -> RawRawVal -> RawRawVal -> RawRawVal -> VecRepresentation
 vec_representation_quint n m o p q =
    VecRepresentation { data = arr, size = 5 }
-   where arr = arrayUpdate (arrayUpdate (arrayUpdate (arrayUpdate (arrayConstant q) 0 n) 1 m) 2 o) 3 p
+   where arr = arrayUpdate (arrayUpdate (arrayUpdate (arrayUpdate (arrayUpdate (arrayConstant 0) 0 n) 1 m) 2 o) 3 p) 4 q
 
-/* N copies of V */
+/*
+ * N copies of V
+ *
+ * This has to agree with the equivalent vec_representation_seq, on
+ * the _whole_ array and not just the meaningful part, because that's
+ * what happens in the SMT and thus with the implicit assertions that
+ * happen in SAW, so we can't just do arrayConstant.
+ */
 vec_representation_n: [32] -> RawRawVal -> VecRepresentation
 vec_representation_n n v =
-   VecRepresentation { data = arr, size = n }
-   where arr = arrayConstant v
+   if n == 0 then vec_representation_empty
+   else vec_representation_addtail (vec_representation_n (n - 1) v) v
 
 /* take the sequence seq */
 vec_representation_seq: {n} n <= 0xffffffff => [n] RawRawVal -> VecRepresentation

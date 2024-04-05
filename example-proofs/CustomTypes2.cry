@@ -30,6 +30,7 @@ default_value = (0, 0)
  */
 valid_with_heap : Values::VecObject::T -> Values::HostHeap -> Bool
 valid_with_heap state_val heap =
+   Values::vecobj_valid_with_heap state_val heap /\
    Values::raw_is_u32 count_val /\
    Values::raw_is_u32 last_val
    where

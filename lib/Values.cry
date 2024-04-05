@@ -873,6 +873,14 @@ submodule VecObject where
          dfl = rawraw_of_val (Void::to_raw unit)
          rawraw = HostValues::vec_representation_get_default rep k dfl
 
+   // get all the values
+   getall: {n} n <= 0xffffffff => T -> HostValues::Heap -> [n] Val
+   getall vs heap = map val_of_rawraw rawraws
+      where
+         rep = getrep vs heap
+         dfl = rawraw_of_val (Void::to_raw unit)
+         rawraws = HostValues::vec_representation_getall`{n} rep dfl
+
    // defer equality to raw to avoid duplication (since full_eq needs
    // to be recursive)
    eq: T -> T -> HostValues::Heap -> Bool
@@ -1048,6 +1056,9 @@ vecobj_n = VecObject::n
 vecobj_seq = VecObject::seq
 vecobj_len = VecObject::len
 vecobj_get = VecObject::get
+// without this the type doesn't propagate correctly
+vecobj_getall: {n} n <= 0xffffffff => VecObject::T -> HostValues::Heap -> [n] Val
+vecobj_getall = VecObject::getall
 vecobj_eq = VecObject::eq
 vecobj_addtail = VecObject::addtail
 

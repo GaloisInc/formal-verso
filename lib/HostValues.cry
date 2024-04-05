@@ -158,6 +158,11 @@ vec_representation_get_default : VecRepresentation -> [32] -> RawRawVal -> RawRa
 vec_representation_get_default rep n dfl =
    if n < rep.size then arrayLookup rep.data n else dfl
 
+/* get all values -- ideally n is rep.size and the default value isn't used */
+vec_representation_getall : {n} n <= 0xffffffff => VecRepresentation -> RawRawVal -> [n] RawRawVal
+vec_representation_getall rep dfl = vals
+   where vals @ i = vec_representation_get_default rep i dfl
+
 /* test contents for equivalence */
 private
    vec_representation_equiv_at :

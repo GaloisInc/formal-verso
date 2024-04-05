@@ -1138,6 +1138,109 @@ let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do
    mir_return ok;
 };
 
+/*
+ * This is not a hypercall but we need to intercept it before it calls
+ * vec_unpack_to_linear_memory, as in order to do that it does a
+ * pointer -> u32 cast that crux-mir can't handle.
+ *
+ * vec_unpack_to_slice(env: Env, vec: VecObject, vals: &mut [RawVal]) ->
+ *    Result<Void, Self::Error>
+ *
+ * For the moment at least we need a separate copy of this for each
+ * distinct length, because arrays of symbolic length cause problems.
+ */
+let vec_unpack_to_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+   // alternatively, get a Guest to override at a different point
+   //self <- mir_alloc (mir_adt (smi.GuestType ()));
+   //mir_points_to self (smi.GuestVal ());
+
+   // this is unfortunate but seems to be the only way to make it work
+   // (passing in the contents causes problems)
+   contents <- do {
+      if eval_bool {{ `n == 0 }} then do {
+         // The type annotation here is required or eval_list fails.
+         return {{ [] : [n] Values::RawT }};
+      }
+      else if eval_bool {{ `n == 1 }} then do {
+         contents <- soroban_raw1_fresh "values.vec_unpack_to_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 2 }} then do {
+         contents <- soroban_raw2_fresh "values.vec_unpack_to_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 3 }} then do {
+         contents <- soroban_raw3_fresh "values.vec_unpack_to_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 4 }} then do {
+         contents <- soroban_raw4_fresh "values.vec_unpack_to_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 5 }} then do {
+         contents <- soroban_raw5_fresh "values.vec_unpack_to_slice";
+         return contents;
+      }
+      else do {
+         let msg = "vec_unpack_to_slice: too many elements: ";
+         run (fail (str_concat msg (show n)));
+      };
+   };
+
+   // turn the contents into a SAW list and convert to MIR RawVals
+   let mir_contents_list = list.map (soroban_value_to_mir smi) (eval_list contents);
+
+   // get the corresponding MIR array
+   let RawVal = soroban_value_type_to_mir smi {| Values::RawT |};
+   let mir_contents_array = mir_array_value RawVal mir_contents_list;
+
+   // allocate and populate a reference to it
+   vals <- mir_alloc_mut (mir_array n RawVal);
+   mir_points_to vals mir_contents_array;
+
+   // get a host heap model
+   heap <- mir_fresh_cryptol_var "values.vec_unpack_to_slice.heap" {| Values::HostHeap |};
+
+   // get a vecobject
+   vecobj_val <- soroban_value_fresh "values.vec_unpack_to_slice.vecobj" {| Values::VecObjectT |};
+   let vecobj_mir = soroban_value_to_mir smi vecobj_val;
+
+   // the vec must appear in the heap
+   mir_assert {{ Values::vecobj_valid_with_heap vecobj_val heap }};
+
+   // the length must be correct
+   mir_assert {{ Values::vecobj_len vecobj_val heap == `n }};
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
+
+   // call the function, taking a slice reference to the array
+   mir_execute_func [self, vecobj_mir, mir_slice_value vals];
+
+   // the heap doesn't change
+   soroban_hostheap_assert_state heap;
+
+   // get the values out of the heap
+   let contents' = {{ Values::vecobj_getall`{n} vecobj_val heap }};
+   let mir_contents_list' = list.map (soroban_value_to_mir smi) (eval_list contents');
+   let mir_contents_array' = mir_array_value RawVal mir_contents_list';
+
+   // update the reference to point to the values
+   mir_points_to vals mir_contents_array';
+
+   // return the Soroban void value
+   // XXX share this logic with return_ok (which is currently below and
+   // needs to be moved up)
+   let ret = {{ Values::unit }};
+   let rettype = soroban_value_type_to_mir smi (type ret);
+   let mir_ret = soroban_value_to_mir smi ret;
+   let ok = mir_enum_value (smi.ResultInfallibleType rettype) "Ok" [mir_ret];
+   mir_return ok;
+};
+
 
 /*
  * Construct the "overrides" (checked or admitted SAW theorems, in
@@ -1239,13 +1342,36 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       else
          return [];
    };
+   vec_unpack_to_slice_overrides <- do {
+      if string_list.elem "vec_unpack_to_slice" features then do {
+         let make (n : Int) : TopLevel MIRSpec = do {
+            spec <- mir_unsafe_assume_spec mod
+               // either of these is a possible interception point
+               // (the first just calls the second)
+               "soroban_sdk::env::{impl#9}::vec_unpack_to_slice"
+               //"soroban_env_guest::guest::{impl#0}::vec_unpack_to_slice"
+               (vec_unpack_to_slice_spec n smi);
+            return spec;
+         };
+         spec_0 <- make 0;
+         spec_1 <- make 1;
+         spec_2 <- make 2;
+         spec_3 <- make 3;
+         spec_4 <- make 4;
+         spec_5 <- make 5;
+         return [spec_0, spec_1, spec_2, spec_3, spec_4, spec_5];
+      }
+      else
+         return [];
+   };
    return (list.concats [
       string_new_from_slice_overrides,
       vec_new_overrides,
       vec_len_overrides,
       vec_get_overrides,
       vec_push_back_overrides,
-      vec_new_from_slice_overrides
+      vec_new_from_slice_overrides,
+      vec_unpack_to_slice_overrides
    ]);
 };
 

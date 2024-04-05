@@ -1,19 +1,19 @@
 /*
  * Cryptol-level stuff for modeling the custom type.
  *
- * The Rust representation of the type is a struct with two members
- * (count and last_incr), both u32.
+ * The Rust representation of the type is a tuple struct with two
+ * members, both u32.
  *
  * The native representation is a pair ([32], [32]).
  *
- * The Soroban-level representation is a Values::MapObject::T with the
- * field names as keys and the values being Values::U32::T.
+ * The Soroban-level representation is a Values::VecObject::T that
+ * points to two Values::U32::T.
  */
 
 import Option as Option
 import Values as Values
 import submodule Values::Symbol as Values::Symbol
-import submodule Values::MapObject as Values::MapObject
+import submodule Values::VecObject as Values::VecObject
 import submodule Values::U32 as Values::U32
 import submodule Values::Raw as Values::Raw
 
@@ -26,44 +26,28 @@ default_value : T
 default_value = (0, 0)
 
 /*
- * The symbols.
+ * Check if the underlying VecObject is well formed.
  */
-countsym : Values::Symbol::T
-countsym = Values::Symbol::from_native "count"
-lastsym : Values::Symbol::T
-lastsym = Values::Symbol::from_native "last_incr"
-
-countsym_raw : Values::Raw::T
-countsym_raw = Values::Symbol::to_raw countsym
-lastsym_raw : Values::Raw::T
-lastsym_raw = Values::Symbol::to_raw lastsym
-
-/*
- * Check if the underlying MapObject is well formed.
- * XXX: we can't easily exclude extraneous map fields
- */
-valid_with_heap : Values::MapObject::T -> Values::HostHeap -> Bool
+valid_with_heap : Values::VecObject::T -> Values::HostHeap -> Bool
 valid_with_heap state_val heap =
-   Values::mapobj_has_key countsym_raw state_val heap /\
-   Values::mapobj_has_key lastsym_raw state_val heap /\
    Values::raw_is_u32 count_val /\
    Values::raw_is_u32 last_val
    where
-      count_val = Values::mapobj_get countsym_raw state_val heap
-      last_val = Values::mapobj_get lastsym_raw state_val heap
+      count_val = Values::vecobj_get state_val 0 heap
+      last_val = Values::vecobj_get state_val 1 heap
 
 /*
- * Extract the native representation from a MapObject.
+ * Extract the native representation from a VecObject.
  *
  * Should have already asserted that the elements are U32.
  * Crashes if they aren't.
  */
-val_to_native : Values::MapObject::T -> Values::HostHeap -> T
+val_to_native : Values::VecObject::T -> Values::HostHeap -> T
 val_to_native state_val heap =
    (count_native, last_native)
    where
-      count_raw = Values::MapObject::get countsym_raw state_val heap
-      last_raw = Values::MapObject::get lastsym_raw state_val heap
+      count_raw = Values::VecObject::get state_val 0 heap
+      last_raw = Values::VecObject::get state_val 1 heap
       count_optval = Values::U32::from_raw count_raw
       last_optval = Values::U32::from_raw last_raw
       count_val =

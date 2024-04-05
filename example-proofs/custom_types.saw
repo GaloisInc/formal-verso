@@ -225,8 +225,10 @@ let increment_spec = do {
   soroban_hostheap_assert_state heap';
   soroban_storage_assert_state store';
 
-  // Update our own state
-  mir_ghost_value state_ghost {{ (count_native', last_native') }};
+  // Update our own state... or not.
+  // This doesn't work; it needs to be mir_update_ghost_value, which
+  // doesn't exist yet. See saw-script #2040.
+  //mir_ghost_value state_ghost {{ (count_native', last_native') }};
 
   // Return the new count as a Rust u32
   mir_return (mir_term count_native');

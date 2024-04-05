@@ -489,25 +489,36 @@ submodule Raw where
    is_false v = small_val_eq v val_false
 
    // additional type tests
+   //
+   // XXX: these need to be the entire validity predicate or bad things happen
+   // when they're used as preconditions. should reorganize to make things
+   // clearer.
+   //
+   // XXX: also should reorganize to avoid duplicating this logic.
 
    is_bool : T -> Bool
    is_bool v = is_true v \/ is_false v
 
    is_u32 : T -> Bool
-   is_u32 v = tag_of_val v == tag_u32val
+   is_u32 v = tag_of_val v == tag_u32val /\ minor_of_val v == 0
 
    is_i32 : T -> Bool
-   is_i32 v = tag_of_val v == tag_i32val
+   is_i32 v = tag_of_val v == tag_i32val /\ minor_of_val v == 0
+
+   is_string : T -> Bool
+   is_string v =
+      tag_of_val v == tag_stringobject /\ minor_of_val v == 0
 
    is_symbol : T -> Bool
    is_symbol v =
-      tag_of_val v == tag_symbolsmall \/ tag_of_val v == tag_symbolobject
+      (tag_of_val v == tag_symbolsmall /\ smallsym_body_valid (body_of_val v)) \/
+      (tag_of_val v == tag_symbolobject /\ minor_of_val v == 0)
 
    is_vec : T -> Bool
-   is_vec v = tag_of_val v == tag_vecobject
+   is_vec v = tag_of_val v == tag_vecobject /\ minor_of_val v == 0
 
    is_map : T -> Bool
-   is_map v = tag_of_val v == tag_mapobject
+   is_map v = tag_of_val v == tag_mapobject /\ minor_of_val v == 0
 
    // go straight to full_eq
    eq: T -> T -> HostValues::Heap -> Bool
@@ -725,7 +736,7 @@ submodule Symbol where
    valid' : Val -> Bool
    valid' v =
       (tag == tag_symbolsmall /\ smallsym_body_valid (body_of_val v)) \/
-      (tag == tag_symbolobject /\ False /* XXX notyet */ )
+      (tag == tag_symbolobject /\ minor_of_val v == 0)
       where
          tag = tag_of_val v
 

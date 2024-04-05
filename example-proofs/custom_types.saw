@@ -11,8 +11,11 @@ mod <- mir_load_module "../soroban-examples/custom_types/target/linked-mir.json"
 // Initialize soroban verification with storage and symbol APIs
 soroban <- soroban_init mod ["storage", "symbol", "u32_val"];
 
-// Compute Symbol value for COUNTER
-let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
+// Compute Symbol value for STATE
+let STATE = {{ Values::symbol_from_native "STATE" }};
+
+// Track the state
+state_ghost <- declare_ghost_state "state_ghost";
 
 /*
  * SAW-level operations on the custom type.
@@ -29,14 +32,12 @@ let COUNTER = {{ Values::symbol_from_native "COUNTER" }};
 /*
  * Get a fresh value.
  *
- * Note: don't make a fresh pair; make two fresh u32s and wrap them in
- * a concrete pair. Otherwise SAW will get upset that the pair wrapper
- * gets thrown away.
+ * Note: make a fresh pair, not two fresh u32s. The reachability tracking
+ * for fresh vars won't find fresh u32s in a concrete pair.
  */
 let custom_fresh_native name = do {
-   count_val <- mir_fresh_cryptol_var (str_concat name ".count") {| [32] |};
-   last_val <- mir_fresh_cryptol_var (str_concat name ".last") {| [32] |};
-   return {{ (count_val, last_val) }};
+   val <- mir_fresh_cryptol_var name {| ([32], [32]) |};
+   return val;
 };
 
 /*
@@ -52,12 +53,12 @@ let custom_fresh_native name = do {
  */
 let assert_storage_precond heap store state_native = do {
    // First, check if a state value is set. This controls a bunch of the other logic.
-   let has = soroban_store_has store COUNTER;
+   let has = soroban_store_has store STATE;
 
-   // Get value in the store at COUNTER as an Option::T (Option::T (Values::MapObject::T))
+   // Get value in the store at STATE as an Option::T (Option::T (Values::MapObject::T))
    // outer None means there was no value
    // inner None means the value wasn't the right type
-   let state_optopt_val = soroban_store_get store COUNTER {| Values::MapObjectT |};
+   let state_optopt_val = soroban_store_get store STATE {| Values::MapObjectT |};
 
    // First assert that if we have a value in the store, it's the right type
    // (that is, state_optopt_val's inner Option::T is not None)
@@ -145,6 +146,9 @@ let get_state_spec = do {
   soroban_hostheap_assert_state heap;
   soroban_storage_assert_state store;
 
+  // Attach to our own state
+  mir_ghost_value state_ghost state;
+
   // Execute the function with an instance of Env
   mir_execute_func [soroban.smi.EnvVal ()];
 
@@ -169,6 +173,9 @@ let increment_spec = do {
   // Declare a fresh symbolic host heap
   heap <- mir_fresh_cryptol_var "hostheap" {| Values::HostHeap |};
 
+  // The heap needs to be able to allocate at least once.
+  mir_assert {{ Values::heap_has_space heap 1 }};
+
   // Declare a fresh symbolic store
   store <- mir_fresh_cryptol_var "store" {| Store::T |};
 
@@ -181,9 +188,18 @@ let increment_spec = do {
   // get an argument
   incr_native <- mir_fresh_cryptol_var "incr" {| [32] |};
 
+  // If the increment is too large, the contract will crash with an
+  // integer overflow. Rule that case out as not interesting.
+  // (Changing the contract to fail explicitly or whatever else would
+  // detract from its value as an example.)
+  mir_precond {{ state.0 + incr_native >= state.0 }};
+
   // Attach the SDK state
   soroban_hostheap_assert_state heap;
   soroban_storage_assert_state store;
+
+  // Attach to our own state
+  mir_ghost_value state_ghost state;
 
   // Execute the function with an instance of Env and the argument
   // (which is a Rust u32)
@@ -194,20 +210,23 @@ let increment_spec = do {
   let last_native' = incr_native;
 
   // Convert to Values::U32::T
-  let count_val' = {{ Values::u32_of_native count_native' }};
-  let last_val' = {{ Values::u32_of_native last_native' }};
+  let count_val' = {{ Values::u32_from_native count_native' }};
+  let last_val' = {{ Values::u32_from_native last_native' }};
 
   // allocate a new MapObject
-  let state_val'heap' = soroban_value_mapobj_2 {{ countsym }} count_val' {{ lastsym }} last_val' heap;
-  let state_val' = {{ stateval'heap'.0 }};
-  let heap' = {{ stateval'heap'.1 }};
+  heap'state_val' <- soroban_value_mapobj_2 {{ countsym }} count_val' {{ lastsym }} last_val' heap;
+  let heap' = {{ heap'state_val'.0 }};
+  let state_val' = {{ heap'state_val'.1 }};
 
   // update the store
-  let store' = soroban_store_set store COUNTER state_val';
+  let store' = soroban_store_set store STATE state_val';
 
   // Assert the new SDK state
   soroban_hostheap_assert_state heap';
   soroban_storage_assert_state store';
+
+  // Update our own state
+  mir_ghost_value state_ghost {{ (count_native', last_native') }};
 
   // Return the new count as a Rust u32
   mir_return (mir_term count_native');

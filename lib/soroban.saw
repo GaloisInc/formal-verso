@@ -297,7 +297,7 @@ let soroban_value_to_raw (t : Type) : Term =
    else if type_eq t {| Values::SymbolT |} then
       {{ Values::symbol_to_raw }}
    else if type_eq t {| Values::VecObjectT |} then
-      {{ Values::vecobj_to_raw }}
+      {{ Values::vecobject_to_raw }}
    else if type_eq t {| Values::MapObjectT |} then
       {{ Values::mapobj_to_raw }}
    else

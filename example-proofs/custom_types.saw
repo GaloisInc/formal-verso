@@ -63,7 +63,7 @@ let assert_storage_precond heap store state_native = do {
    // (that is, state_optopt_val's inner Option::T is not None)
    let cond_1 = {{
       if has then
-        // Since we have a value, state_optopt_val is a Some so unwrap is ok.
+         // Since we have a value, state_optopt_val is a Some so unwrap is ok.
          // After unwrapping, the inner value (state_opt_val) should be Some
          // indicating that we did actually get a VecObject.
          Option::is_some (Option::unsafe_unwrap state_optopt_val)

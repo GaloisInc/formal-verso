@@ -1280,12 +1280,21 @@ let vec_unpack_to_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = d
 
 
 /*
- * Convert a raw mapkey (term of type String n) to a string slice.
+ * Construct a fresh map key (which is a string/symbol) of length m.
  */
-let soroban_mapkey_to_slice (m : Int) (str : Term) = do {
+let soroban_fresh_mapkey (m : Int) = do {
+   // make a fresh string
+   keycontents <- mir_fresh_cryptol_var "values.map_unpack_to_slice.val" {| String m |};
+   // make a Cryptol-side key using the short symbol encoding
+   // (the keys will be Symbol::T values)
+   let keysym = {{ Values::symbol_from_native keycontents }};
+   let keyval = {{ Values::symbol_to_raw keysym }};
+   // make a MIR-level string slice
    ref <- mir_alloc (mir_array m mir_u8);
-   mir_points_to ref (mir_term str);
-   return (mir_str_slice_value ref);
+   mir_points_to ref (mir_term keycontents);
+   let mir_keycontents = mir_str_slice_value ref;
+   // produce both
+   return (mir_keycontents, keyval);
 };
 
 /*
@@ -1301,7 +1310,7 @@ let soroban_mapkey_to_slice (m : Int) (str : Term) = do {
  *
  * XXX: for now we can only support strings of homogeneous length m.
  */
-let map_unpack_to_slice_spec (n : Int) (m : Int) (smi : SorobanMIRItems) : MIRSetup () = do {
+let map_unpack_to_slice_spec (ms : [Int]) (smi : SorobanMIRItems) : MIRSetup () = do {
    // get an environment
    self <- mir_alloc (mir_adt (smi.EnvType ()));
    mir_points_to self (smi.EnvVal ());
@@ -1309,52 +1318,16 @@ let map_unpack_to_slice_spec (n : Int) (m : Int) (smi : SorobanMIRItems) : MIRSe
    //self <- mir_alloc (mir_adt (smi.GuestType ()));
    //mir_points_to self (smi.GuestVal ());
 
+   let n = length ms;
+
    // only support up to 9 characters because we use the short symbol encoding internally
-   mir_assert {{ `m <= 9 }};
+   _ <- list.mapM (\m -> mir_assert {{ `m <= 9 }}) ms;
 
    // this is unfortunate but seems to be the only way to make it work
    // (passing in the contents causes problems)
-   keycontents <- do {
-      if eval_bool {{ `n == 0 }} then do {
-         // The type annotation here is required or eval_list fails.
-         return {{ [] : [n] [m] 8 }};
-      }
-      else if eval_bool {{ `n == 1 }} then do {
-         contents <- soroban_string1_fresh m "values.map_unpack_to_slice";
-         return contents;
-      }
-      else if eval_bool {{ `n == 2 }} then do {
-         contents <- soroban_string2_fresh m "values.map_unpack_to_slice";
-         return contents;
-      }
-      else if eval_bool {{ `n == 3 }} then do {
-         contents <- soroban_string3_fresh m "values.map_unpack_to_slice";
-         return contents;
-      }
-      else if eval_bool {{ `n == 4 }} then do {
-         contents <- soroban_string4_fresh m "values.map_unpack_to_slice";
-         return contents;
-      }
-      else if eval_bool {{ `n == 5 }} then do {
-         contents <- soroban_string5_fresh m "values.map_unpack_to_slice";
-         return contents;
-      }
-      else do {
-         let msg = "map_unpack_to_slice: too many elements: ";
-         run (fail (str_concat msg (show n)));
-      };
-   };
-
-   // make a list of Cryptol-side keys using the short symbol encoding
-   // (just make the keys Symbol::T values)
-   let rawkeys = {{ keyvals
-      where
-         keysyms = map Values::symbol_from_native keycontents
-         keyvals = map Values::symbol_to_raw keysyms
-   }};
-
-   // turn the contents into a SAW list and convert to a list of string slices
-   mir_keycontents_list <- list.mapM (soroban_mapkey_to_slice m) (eval_list keycontents);
+   pairs <- list.mapM soroban_fresh_mapkey ms;
+   let (mir_keycontents_list, rawkeys_list : [Term]) = list.unzip pairs;
+   let rawkeys = list_term rawkeys_list;
 
    // now make a MIR array of references
    //let keys_type = mir_array m mir_u8;
@@ -1534,20 +1507,20 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
    };
    map_unpack_to_slice_overrides <- do {
       if string_list.elem "map_unpack_to_slice" features then do {
-         let make (n : Int) (m : Int) : TopLevel MIRSpec = do {
+         let make (ms : [Int]) : TopLevel MIRSpec = do {
             spec <- mir_unsafe_assume_spec mod
                // either of these is a possible interception point
                // (the first just calls the second)
                "soroban_sdk::env::{impl#9}::map_unpack_to_slice"
                //"soroban_env_guest::guest::{impl#0}::map_unpack_to_slice"
-               (map_unpack_to_slice_spec n m smi);
+               (map_unpack_to_slice_spec ms smi);
             return spec;
          };
          // For now make just the one we're going to use (XXX: add more later,
          // though we'll ultimately need a lot unless we can get it to work with
          // indeterminate heterogeneous slices...)
-         spec_2_5 <- make 2 5;
-         return [spec_2_5];
+         spec_5_9 <- make [5, 9];
+         return [spec_5_9];
       }
       else
          return [];

@@ -1,6 +1,7 @@
 typedef ListAPI = {
   concats : ([[a]] -> [a]),
   map : ((a -> b) -> [a] -> [b]),
+  mapM : ((a -> M b) -> [a] -> M [b]),
   foldl : ((b -> a -> b) -> b -> [a] -> b),
   range : (Int -> Int -> [Int]),
   sequence : ([m a] -> m [a])
@@ -28,6 +29,16 @@ let list : ListAPI =
     else
       concat [f (head xs)] (map f (tail xs)) in
 
+  rec mapM (f : a -> M b) (xs : [a]) : M [b] = do {
+    if null xs then
+      return []
+    else do {
+      h <- f (head xs);
+      t <- mapM f (tail xs);
+      return (concat [h] t);
+    };
+  } in
+
   rec foldl (f : b -> a -> b) (acc : b) (xs : [a]) : b =
     if null xs then
       acc
@@ -42,6 +53,7 @@ let list : ListAPI =
   {
     concats = concats,
     map = map,
+    mapM = mapM,
     foldl = foldl,
     range = range,
     sequence = sequence

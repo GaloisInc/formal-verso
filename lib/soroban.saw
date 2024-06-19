@@ -377,9 +377,9 @@ let soroban_value_type_to_mir (smi : SorobanMIRItems) t =
  *    - we can construct calls to arbitrary Rust functions if
  *      needed, but using them in spec-level logic is at least
  *      problematic (not sure whether it's allowed at all);
- *    - when we get to supporting object-style values, the
- *      external pointer part can just be pushed across as part
- *      of the u64 and we don't need to process the referent.
+ *    - for object-style values, the external pointer part can just be
+ *      pushed across as part of the u64 and we don't need to process
+ *      the referent.
  *
  * In fact, I think this is why the Cryptol-level value logic was
  * built to match the internals of the Rust value logic.

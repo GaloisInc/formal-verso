@@ -1,5 +1,6 @@
 typedef ListAPI = {
   concats : ([[a]] -> [a]),
+  unzip : ([(a, b)] -> ([a], [b])),
   map : ((a -> b) -> [a] -> [b]),
   mapM : ((a -> M b) -> [a] -> M [b]),
   foldl : ((b -> a -> b) -> b -> [a] -> b),
@@ -29,6 +30,15 @@ let list : ListAPI =
     else
       concat [f (head xs)] (map f (tail xs)) in
 
+  rec unzip (xys : [(a, b)]) : ([a], [b]) =
+    if null xys then
+      ([], [])
+    else
+      let (x, y) = head xys in
+      let (xs, ys) = unzip (tail xys) in
+      (concat [x] xs, concat [y] ys)
+  in
+
   rec mapM (f : a -> M b) (xs : [a]) : M [b] = do {
     if null xs then
       return []
@@ -52,6 +62,7 @@ let list : ListAPI =
 
   {
     concats = concats,
+    unzip = unzip,
     map = map,
     mapM = mapM,
     foldl = foldl,

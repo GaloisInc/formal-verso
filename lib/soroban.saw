@@ -279,6 +279,43 @@ let soroban_raw5_fresh basename : MIRSetup Term = do {
 };
 
 /*
+ * Generate a sequence of n fresh strings of length m.
+ * (For n > 0, the empty case isn't interesting.)
+ *
+ * The sequence itself is not (must not be) fresh.
+ */
+let soroban_string1_fresh m basename : MIRSetup Term = do {
+   val0 <- mir_fresh_cryptol_var (str_concat basename ".val0") {| String m |};
+   return {{ [val0] }};
+};
+let soroban_string2_fresh m basename : MIRSetup Term = do {
+   val0 <- mir_fresh_cryptol_var (str_concat basename ".val0") {| String m |};
+   val1 <- mir_fresh_cryptol_var (str_concat basename ".val1") {| String m |};
+   return {{ [val0, val1] }};
+};
+let soroban_string3_fresh m basename : MIRSetup Term = do {
+   val0 <- mir_fresh_cryptol_var (str_concat basename ".val0") {| String m |};
+   val1 <- mir_fresh_cryptol_var (str_concat basename ".val1") {| String m |};
+   val2 <- mir_fresh_cryptol_var (str_concat basename ".val2") {| String m |};
+   return {{ [val0, val1, val2] }};
+};
+let soroban_string4_fresh m basename : MIRSetup Term = do {
+   val0 <- mir_fresh_cryptol_var (str_concat basename ".val0") {| String m |};
+   val1 <- mir_fresh_cryptol_var (str_concat basename ".val1") {| String m |};
+   val2 <- mir_fresh_cryptol_var (str_concat basename ".val2") {| String m |};
+   val3 <- mir_fresh_cryptol_var (str_concat basename ".val3") {| String m |};
+   return {{ [val0, val1, val2, val3] }};
+};
+let soroban_string5_fresh m basename : MIRSetup Term = do {
+   val0 <- mir_fresh_cryptol_var (str_concat basename ".val0") {| String m |};
+   val1 <- mir_fresh_cryptol_var (str_concat basename ".val1") {| String m |};
+   val2 <- mir_fresh_cryptol_var (str_concat basename ".val2") {| String m |};
+   val3 <- mir_fresh_cryptol_var (str_concat basename ".val3") {| String m |};
+   val4 <- mir_fresh_cryptol_var (str_concat basename ".val4") {| String m |};
+   return {{ [val0, val1, val2, val3, val4] }};
+};
+
+/*
  * Convert from a specific value type to Values::Raw::T.
  * Value types only.
  *
@@ -1243,6 +1280,137 @@ let vec_unpack_to_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = d
 
 
 /*
+ * Convert a raw mapkey (term of type String n) to a string slice.
+ */
+let soroban_mapkey_to_slice (m : Int) (str : Term) = do {
+   ref <- mir_alloc (mir_array m mir_u8);
+   mir_points_to ref (mir_term str);
+   return (mir_str_slice_value ref);
+};
+
+/*
+ * This is not a hypercall but we need to intercept it before it calls
+ * map_unpack_to_linear_memory, as in order to do that it does a
+ * pointer -> u32 cast that crux-mir can't handle.
+ *
+ * map_unpack_to_slice(env: Env, map: MapObject, keys: &[&str], vals: &mut [RawVal]) ->
+ *    Result<Void, Self::Error>
+ *
+ * For the moment at least we need a separate copy of this for each
+ * distinct length, because arrays of symbolic length cause problems.
+ *
+ * XXX: for now we can only support strings of homogeneous length m.
+ */
+let map_unpack_to_slice_spec (n : Int) (m : Int) (smi : SorobanMIRItems) : MIRSetup () = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+   // alternatively, get a Guest to override at a different point
+   //self <- mir_alloc (mir_adt (smi.GuestType ()));
+   //mir_points_to self (smi.GuestVal ());
+
+   // only support up to 9 characters because we use the short symbol encoding internally
+   mir_assert {{ `m <= 9 }};
+
+   // this is unfortunate but seems to be the only way to make it work
+   // (passing in the contents causes problems)
+   keycontents <- do {
+      if eval_bool {{ `n == 0 }} then do {
+         // The type annotation here is required or eval_list fails.
+         return {{ [] : [n] [m] 8 }};
+      }
+      else if eval_bool {{ `n == 1 }} then do {
+         contents <- soroban_string1_fresh m "values.map_unpack_to_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 2 }} then do {
+         contents <- soroban_string2_fresh m "values.map_unpack_to_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 3 }} then do {
+         contents <- soroban_string3_fresh m "values.map_unpack_to_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 4 }} then do {
+         contents <- soroban_string4_fresh m "values.map_unpack_to_slice";
+         return contents;
+      }
+      else if eval_bool {{ `n == 5 }} then do {
+         contents <- soroban_string5_fresh m "values.map_unpack_to_slice";
+         return contents;
+      }
+      else do {
+         let msg = "map_unpack_to_slice: too many elements: ";
+         run (fail (str_concat msg (show n)));
+      };
+   };
+
+   // make a list of Cryptol-side keys using the short symbol encoding
+   // (just make the keys Symbol::T values)
+   let rawkeys = {{ keyvals
+      where
+         keysyms = map Values::symbol_from_native keycontents
+         keyvals = map Values::symbol_to_raw keysyms
+   }};
+
+   // turn the contents into a SAW list and convert to a list of string slices
+   mir_keycontents_list <- list.mapM (soroban_mapkey_to_slice m) (eval_list keycontents);
+
+   // now make a MIR array of references
+   //let keys_type = mir_array m mir_u8;
+   let keys_type = mir_ref mir_str;
+   let mir_keycontents_array = mir_array_value keys_type mir_keycontents_list;
+
+   // allocate and populate a reference to it
+   keys <- mir_alloc (mir_array n keys_type);
+   mir_points_to keys mir_keycontents_array;
+
+   // now make the value outputs
+   let RawVal = soroban_value_type_to_mir smi {| Values::RawT |};
+   let vals_type = mir_array n RawVal;
+   mir_vals_array <- mir_fresh_expanded_value "values.map_unpack_to_slice.vals" vals_type;
+   vals <- mir_alloc_mut vals_type;
+   mir_points_to vals mir_vals_array;
+
+   // get a host heap model
+   heap <- mir_fresh_cryptol_var "values.map_unpack_to_slice.heap" {| Values::HostHeap |};
+
+   // get a mapobject
+   mapobj_val <- soroban_value_fresh "values.map_unpack_to_slice.mapobj" {| Values::MapObjectT |};
+   let mapobj_mir = soroban_value_to_mir smi mapobj_val;
+
+   // the map must appear in the heap
+   mir_assert {{ Values::mapobj_valid_with_heap mapobj_val heap }};
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
+
+   // call the function, taking a slice reference to the outer array
+   mir_execute_func [self, mapobj_mir, mir_slice_value keys, mir_slice_value vals];
+
+   // the heap doesn't change
+   soroban_hostheap_assert_state heap;
+
+   // get the values out
+   let vals_contents' = {{ Values::mapobj_multiget rawkeys mapobj_val heap }};
+   let mir_vals_contents' = list.map (soroban_value_to_mir smi) (eval_list vals_contents');
+   let mir_vals_array' = mir_array_value RawVal mir_vals_contents';
+
+   // update the reference to point to the values
+   mir_points_to vals mir_vals_array';
+
+   // return the Soroban void value
+   // XXX share this logic with return_ok (which is currently below and
+   // needs to be moved up)
+   let ret = {{ Values::unit }};
+   let rettype = soroban_value_type_to_mir smi (type ret);
+   let mir_ret = soroban_value_to_mir smi ret;
+   let ok = mir_enum_value (smi.ResultInfallibleType rettype) "Ok" [mir_ret];
+   mir_return ok;
+};
+
+
+/*
  * Construct the "overrides" (checked or admitted SAW theorems, in
  * this case admitted) for the SDK host-stored-value interface.
  */
@@ -1364,6 +1532,26 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       else
          return [];
    };
+   map_unpack_to_slice_overrides <- do {
+      if string_list.elem "map_unpack_to_slice" features then do {
+         let make (n : Int) (m : Int) : TopLevel MIRSpec = do {
+            spec <- mir_unsafe_assume_spec mod
+               // either of these is a possible interception point
+               // (the first just calls the second)
+               "soroban_sdk::env::{impl#9}::map_unpack_to_slice"
+               //"soroban_env_guest::guest::{impl#0}::map_unpack_to_slice"
+               (map_unpack_to_slice_spec n m smi);
+            return spec;
+         };
+         // For now make just the one we're going to use (XXX: add more later,
+         // though we'll ultimately need a lot unless we can get it to work with
+         // indeterminate heterogeneous slices...)
+         spec_2_5 <- make 2 5;
+         return [spec_2_5];
+      }
+      else
+         return [];
+   };
    return (list.concats [
       string_new_from_slice_overrides,
       vec_new_overrides,
@@ -1371,7 +1559,7 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       vec_get_overrides,
       vec_push_back_overrides,
       vec_new_from_slice_overrides,
-      vec_unpack_to_slice_overrides
+      map_unpack_to_slice_overrides
    ]);
 };
 

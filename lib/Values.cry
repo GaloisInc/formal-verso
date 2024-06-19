@@ -233,15 +233,15 @@ private
 //
 // XXX currently you have to know how many characters are in the
 // decoded string. This is not optimal.
-private
-   smallsym_body_of_string : {n} (n <= MAX_SMALL_CHARS) => String n -> [56]
-   smallsym_body_of_string s = zext (join (map smallsym_encode s))
+//private
+smallsym_body_of_string : {n} (n <= MAX_SMALL_CHARS) => String n -> [56]
+smallsym_body_of_string s = zext (join (map smallsym_encode s))
 
-   smallsym_string_of_body : {n} (n <= MAX_SMALL_CHARS) => [56] -> String n
-   smallsym_string_of_body bits =
-      take`{n} ((map smallsym_decode (split`{9} bits')) : String 9)
-      where
-         bits' = drop bits : [SMALLSYM_BITS]
+smallsym_string_of_body : {n} (n <= MAX_SMALL_CHARS) => [56] -> String n
+smallsym_string_of_body bits =
+   take`{n} ((map smallsym_decode (split`{9} bits')) : String 9)
+   where
+      bits' = drop bits : [SMALLSYM_BITS]
 
 
 ////////////////////////////////////////////////////////////
@@ -989,6 +989,14 @@ submodule MapObject where
          dfl = rawraw_of_val (Void::to_raw unit)
          rawraw = HostValues::map_representation_get_default (rawraw_of_val k) rep dfl
 
+   // get the values for keys ks; return unit where not found
+   multiget ks m heap = map val_of_rawraw rawraws
+      where
+         rawks = map rawraw_of_val ks
+         rep = getrep m heap
+         dfl = rawraw_of_val (Void::to_raw unit)
+         rawraws = HostValues::map_representation_multiget_default rawks rep dfl
+
    // defer equality to raw to avoid duplication (since full_eq needs
    // to be recursive)
    eq: T -> T -> HostValues::Heap -> Bool
@@ -1083,6 +1091,7 @@ mapobj_singleton = MapObject::singleton
 mapobj_pair = MapObject::pair
 mapobj_has_key = MapObject::has_key
 mapobj_get = MapObject::get
+mapobj_multiget = MapObject::multiget
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

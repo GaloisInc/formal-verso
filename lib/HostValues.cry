@@ -256,6 +256,11 @@ map_representation_get_default k rep dfl =
    if arrayLookup rep.here k == False then dfl
    else arrayLookup rep.data k
 
+/* get values for ks, returning default value where not present */
+map_representation_multiget_default : {n} [n] RawRawVal -> MapRepresentation -> RawRawVal -> [n] RawRawVal
+map_representation_multiget_default ks rep dfl = result
+   where result @ i = map_representation_get_default (ks @ i) rep dfl
+
 /* test contents for equivalence */
 map_representation_equiv :
        (RawRawVal -> RawRawVal -> Heap -> Bool) ->

@@ -1307,8 +1307,6 @@ let soroban_fresh_mapkey (m : Int) = do {
  *
  * For the moment at least we need a separate copy of this for each
  * distinct length, because arrays of symbolic length cause problems.
- *
- * XXX: for now we can only support strings of homogeneous length m.
  */
 let map_unpack_to_slice_spec (ms : [Int]) (smi : SorobanMIRItems) : MIRSetup () = do {
    // get an environment

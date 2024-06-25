@@ -1321,8 +1321,7 @@ let map_unpack_to_slice_spec (ms : [Int]) (smi : SorobanMIRItems) : MIRSetup () 
    // only support up to 9 characters because we use the short symbol encoding internally
    _ <- list.mapM (\m -> mir_assert {{ `m <= 9 }}) ms;
 
-   // this is unfortunate but seems to be the only way to make it work
-   // (passing in the contents causes problems)
+   // make n fresh keys
    pairs <- list.mapM soroban_fresh_mapkey ms;
    let (mir_keycontents_list, rawkeys_list : [Term]) = list.unzip pairs;
    let rawkeys = list_term rawkeys_list;
@@ -1337,9 +1336,40 @@ let map_unpack_to_slice_spec (ms : [Int]) (smi : SorobanMIRItems) : MIRSetup () 
    mir_points_to keys mir_keycontents_array;
 
    // now make the value outputs
+   valcontents <- do {
+      if eval_bool {{ `n == 0 }} then do {
+         // The type annotation here is required or eval_list fails.
+         return {{ [] : [n] Values::RawT }};
+      }
+      else if eval_bool {{ `n == 1 }} then do {
+         valcontents <- soroban_raw1_fresh "values.vec_unpack_to_slice";
+         return valcontents;
+      }
+      else if eval_bool {{ `n == 2 }} then do {
+         valcontents <- soroban_raw2_fresh "values.vec_unpack_to_slice";
+         return valcontents;
+      }
+      else if eval_bool {{ `n == 3 }} then do {
+         valcontents <- soroban_raw3_fresh "values.vec_unpack_to_slice";
+         return valcontents;
+      }
+      else if eval_bool {{ `n == 4 }} then do {
+         valcontents <- soroban_raw4_fresh "values.vec_unpack_to_slice";
+         return valcontents;
+      }
+      else if eval_bool {{ `n == 5 }} then do {
+         valcontents <- soroban_raw5_fresh "values.vec_unpack_to_slice";
+         return valcontents;
+      }
+      else do {
+         let msg = "vec_unpack_to_slice: too many elements: ";
+         run (fail (str_concat msg (show n)));
+      };
+   };
+   let mir_vals_list = list.map (soroban_value_to_mir smi) (eval_list valcontents);
    let RawVal = soroban_value_type_to_mir smi {| Values::RawT |};
+   let mir_vals_array = mir_array_value RawVal mir_vals_list;
    let vals_type = mir_array n RawVal;
-   mir_vals_array <- mir_fresh_expanded_value "values.map_unpack_to_slice.vals" vals_type;
    vals <- mir_alloc_mut vals_type;
    mir_points_to vals mir_vals_array;
 

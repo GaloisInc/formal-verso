@@ -4,7 +4,7 @@ include "../lib/soroban.saw";
 mod <- mir_load_module "../soroban-examples/auth/target/linked-mir.json";
 
 // Initialize soroban verification with address API
-soroban <- soroban_init mod ["address_val"];
+soroban <- soroban_init mod ["address"];
 
 let auth_spec = do {
 

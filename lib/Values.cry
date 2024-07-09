@@ -155,7 +155,7 @@ private
    tag_symbolobject = 74 : Tag
    tag_vecobject = 75 : Tag
    tag_mapobject = 76 : Tag
-   //tag_addressobject = 77 : Tag
+   tag_addressobject = 77 : Tag
 
    // correspondingly, upper bound of "object" types
    object_tag_upper_bound = 78 : Tag
@@ -1007,7 +1007,15 @@ submodule MapObject where
 // addressobject
 // val.rs line 332
 
-// TBD
+submodule AddressObject where
+   newtype T = { val : Val }
+
+   valid' : Val -> Bool
+   valid' v = tag_of_val v == tag_addressobject /\ minor_of_val v == 0
+
+   valid : T -> Bool
+   valid vs = valid' vs.val
+
 
 ////////////////////////////////////////////////////////////
 // workarounds for saw-script #1964
@@ -1026,6 +1034,7 @@ type StringObjectT = StringObject::T
 type SymbolT = Symbol::T
 type VecObjectT = VecObject::T
 type MapObjectT = MapObject::T
+type AddressObjectT = AddressObject::T
 type RawT = Raw::T
 
 void_valid = Void::valid
@@ -1092,6 +1101,8 @@ mapobj_pair = MapObject::pair
 mapobj_has_key = MapObject::has_key
 mapobj_get = MapObject::get
 mapobj_multiget = MapObject::multiget
+
+addressobj_valid = AddressObject::valid
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

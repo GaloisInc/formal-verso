@@ -39,6 +39,7 @@ typedef SorobanMIRItems = {
    EventsType : (() -> MIRAdt),
    EventsVal : (() -> MIRValue),
    SymbolType : (() -> MIRAdt),
+   AddressType : (() -> MIRAdt),
 
    // from the soroban_env_common crate
    VoidType : (() -> MIRAdt),
@@ -48,6 +49,7 @@ typedef SorobanMIRItems = {
    SymbolValType : (() -> MIRAdt),
    VecObjectType : (() -> MIRAdt),
    MapObjectType : (() -> MIRAdt),
+   AddressObjectType : (() -> MIRAdt),
    RawValType : (() -> MIRAdt)
 };
 
@@ -104,6 +106,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
    let EventsType = find_adt_when "events" "soroban_sdk::events::Events" in
    let EventsVal () = mir_struct_value (EventsType ()) [EnvVal ()] in
    let SymbolType = find_adt_when "symbol" "soroban_sdk::symbol::Symbol" in
+   let AddressType = find_adt "soroban_sdk::address::Address" in
 
    // from the soroban_env_common crate
    let VoidType = find_adt_when "void_val" "soroban_env_common::raw_val::Void" in
@@ -113,6 +116,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
    let SymbolValType = find_adt_when "symbol" "soroban_env_common::symbol::Symbol" in
    let VecObjectType = find_adt_when "vec_val" "soroban_env_common::raw_val::VecObject" in
    let MapObjectType = find_adt_when "map_val" "soroban_env_common::raw_val::MapObject" in
+   let AddressObjectType = find_adt_when "address_val" "soroban_env_common::raw_val::AddressObject" in
    let RawValType = find_adt "soroban_env_common::raw_val::RawVal" in
 
    {
@@ -133,6 +137,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
       EventsType = EventsType,
       EventsVal = EventsVal,
       SymbolType = SymbolType,
+      AddressType = AddressType,
 
       // from the soroban_env_common crate
       VoidType = VoidType,
@@ -142,6 +147,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
       SymbolValType = SymbolValType,
       VecObjectType = VecObjectType,
       MapObjectType = MapObjectType,
+      AddressObjectType = AddressObjectType,
       RawValType = RawValType
    };
 
@@ -206,6 +212,8 @@ let soroban_value_valid (t : Type) : Term =
       {{ Values::vecobject_valid }}
    else if type_eq t {| Values::MapObjectT |} then
       {{ Values::mapobj_valid }}
+   else if type_eq t {| Values::AddressObjectT |} then
+      {{ Values::addressobj_valid }}
    else if type_eq t {| Values::RawT |} then
       {{ Values::raw_valid }}
    else if type_eq t {| Store::T |} then
@@ -390,6 +398,8 @@ let soroban_value_type_to_mir (smi : SorobanMIRItems) t =
       mir_adt (smi.VecObjectType ())
    else if type_eq t {| Values::MapObjectT |} then
       mir_adt (smi.MapObjectType ())
+   else if type_eq t {| Values::AddressObjectT |} then
+      mir_adt (smi.AddressObjectType ())
    else if type_eq t {| Values::RawT |} then
       mir_adt (smi.RawValType ())
    else
@@ -479,6 +489,10 @@ rec soroban_value_to_mir (smi : SorobanMIRItems) x =
    else if type_eq t {| Values::MapObjectT |} then
       mir_struct_value (smi.MapObjectType ()) [
          //soroban_value_to_mir smi {{ Values::mapobj_to_raw x }}
+         soroban_value_to_mir smi {{ x.val }}
+      ]
+   else if type_eq t {| Values::AddressObjectT |} then
+      mir_struct_value (smi.AddressObjectType ()) [
          soroban_value_to_mir smi {{ x.val }}
       ]
    else if type_eq t {| Values::RawT |} then

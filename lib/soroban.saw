@@ -345,6 +345,8 @@ let soroban_value_to_raw (t : Type) : Term =
       {{ Values::vecobject_to_raw }}
    else if type_eq t {| Values::MapObjectT |} then
       {{ Values::mapobj_to_raw }}
+   else if type_eq t {| Values::AddressObjectT |} then
+      {{ Values::addressobj_to_raw }}
    else
       run (fail (str_concat (show t) " cannot be converted to Raw"));
 

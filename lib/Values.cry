@@ -1016,6 +1016,9 @@ submodule AddressObject where
    valid : T -> Bool
    valid vs = valid' vs.val
 
+   to_raw : T -> Val
+   to_raw vs = vs.val
+
 
 ////////////////////////////////////////////////////////////
 // workarounds for saw-script #1964
@@ -1103,6 +1106,7 @@ mapobj_get = MapObject::get
 mapobj_multiget = MapObject::multiget
 
 addressobj_valid = AddressObject::valid
+addressobj_to_raw = AddressObject::to_raw
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

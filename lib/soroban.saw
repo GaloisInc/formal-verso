@@ -673,7 +673,7 @@ let soroban_value_mapobj_2 k1 v1 k2 v2 heap = do {
 /*
  * This is not a hypercall but we need to intercept it before it calls
  * string_new_from_linear_memory, as in order to do that it does a
- * pointer -> u32 cast that crux-mir can't handle.
+ * pointer -> u32 cast that crucible-mir can't handle.
  *
  * string_new_from_slice(env: Env, slice: &str) ->
  *    Result<StringObject, Self::Error>
@@ -1104,7 +1104,7 @@ let vec_push_back_spec (smi : SorobanMIRItems) = do {
 /*
  * This is not a hypercall but we need to intercept it before it calls
  * vec_new_from_linear_memory, as in order to do that it does a
- * pointer -> u32 cast that crux-mir can't handle.
+ * pointer -> u32 cast that crucible-mir can't handle.
  *
  * vec_new_from_slice(env: Env, vals: &[RawVal]) ->
  *    Result<VecObject, Self::Error>
@@ -1194,7 +1194,7 @@ let vec_new_from_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = do
 /*
  * This is not a hypercall but we need to intercept it before it calls
  * vec_unpack_to_linear_memory, as in order to do that it does a
- * pointer -> u32 cast that crux-mir can't handle.
+ * pointer -> u32 cast that crucible-mir can't handle.
  *
  * vec_unpack_to_slice(env: Env, vec: VecObject, vals: &mut [RawVal]) ->
  *    Result<Void, Self::Error>
@@ -1300,7 +1300,7 @@ let vec_unpack_to_slice_spec (n : Int) (smi : SorobanMIRItems) : MIRSetup () = d
  */
 let soroban_fresh_mapkey (m : Int) = do {
    // make a fresh string
-   keycontents <- mir_fresh_cryptol_var "values.map_unpack_to_slice.val" {| String m |};
+   keycontents <- mir_fresh_cryptol_var "values.map_unpack_to_slice.key" {| String m |};
    // make a Cryptol-side key using the short symbol encoding
    // (the keys will be Symbol::T values)
    let keysym = {{ Values::symbol_from_native keycontents }};
@@ -1314,15 +1314,107 @@ let soroban_fresh_mapkey (m : Int) = do {
 };
 
 /*
+ * Construct a fresh map key (which is a RawVal). Argument is ignored so
+ * this can be used in conjunction with soroban_fresh_mapkey.
+ */
+let soroban_fresh_mapval (smi : SorobanMIRItems) (_ : Int) = do {
+   // get a fresh RawVal
+   val <- mir_fresh_cryptol_var "values.map_new_from_slices.val" {| Values::RawT |};
+   // make a MIR value
+   let mir_val = soroban_value_to_mir smi val;
+   return (mir_val, val);
+};
+
+/*
+ * This is not a hypercall but we need to intercept it before it calls
+ * map_new_from_linear_memory, as in order to do that it does pointer ->
+ * u32 casts that crucible-mir can't handle.
+ *
+ * map_new_from_slices(env: Env, keys: &[&str], vals: &[RawVal]) ->
+ *    Result<MapObject, Self::Error>
+ *
+ * For the moment at least we need a separate copy of this for each
+ * distinct set of string lengths, because arrays of symbolic length
+ * cause problems.
+ */
+let map_new_from_slices_spec (ms : [Int]) (smi : SorobanMIRItems) : MIRSetup () = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+   // alternatively, get a Guest to override at a different point
+   //self <- mir_alloc (mir_adt (smi.GuestType ()));
+   //mir_points_to self (smi.GuestVal ());
+
+   let n = length ms;
+
+   // only support up to 9 characters because we use the short symbol encoding internally
+   _ <- list.mapM (\m -> mir_assert {{ `m <= 9 }}) ms;
+
+   // make n fresh keys
+   key_pairs <- list.mapM soroban_fresh_mapkey ms;
+   let (mir_keycontents_list, rawkeys_list : [Term]) = list.unzip key_pairs;
+   let rawkeys = list_term rawkeys_list;
+
+   // now make a MIR array of references
+   //let keys_type = mir_array m mir_u8;
+   let keys_type = mir_ref mir_str;
+   let mir_keycontents_array = mir_array_value keys_type mir_keycontents_list;
+
+   // allocate and populate a reference to it
+   keys <- mir_alloc (mir_array n keys_type);
+   mir_points_to keys mir_keycontents_array;
+
+   // now make n fresh values
+   val_pairs <- list.mapM (soroban_fresh_mapval smi) ms;
+   let (mir_valcontents_list, rawvals_list : [Term]) = list.unzip val_pairs;
+   let rawvals = list_term rawvals_list;
+
+   // now make a MIR array of references
+   let RawVal = soroban_value_type_to_mir smi {| Values::RawT |};
+   let mir_valcontents_array = mir_array_value RawVal mir_valcontents_list;
+
+   // allocate and populate a reference to it
+   vals <- mir_alloc (mir_array n RawVal);
+   mir_points_to vals mir_valcontents_array;
+
+   // get a host heap model with space to allocate at least once
+   heap <- mir_fresh_cryptol_var "values.map_unpack_to_slice.heap" {| Values::HostHeap |};
+   mir_assert {{ Values::heap_has_space heap 1 }};
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
+
+   // call the function, taking a slice reference to each outer array
+   mir_execute_func [self, mir_slice_value keys, mir_slice_value vals];
+
+   // allocate in the model
+   let heap'm = {{ Values::mapobj_seq rawkeys rawvals heap }};
+   let heap' = {{ heap'm.0 }};
+   let m = {{ heap'm.1 }};
+
+   // rebind the SDK state
+   soroban_hostheap_assert_state heap';
+
+   // return the new object handle
+   // XXX share this logic with return_ok (which is currently below and
+   // needs to be moved up)
+   let rettype = soroban_value_type_to_mir smi (type m);
+   let mir_m = soroban_value_to_mir smi m;
+   let ok = mir_enum_value (smi.ResultInfallibleType rettype) "Ok" [mir_m];
+   mir_return ok;
+};
+
+/*
  * This is not a hypercall but we need to intercept it before it calls
  * map_unpack_to_linear_memory, as in order to do that it does a
- * pointer -> u32 cast that crux-mir can't handle.
+ * pointer -> u32 cast that crucible-mir can't handle.
  *
  * map_unpack_to_slice(env: Env, map: MapObject, keys: &[&str], vals: &mut [RawVal]) ->
  *    Result<Void, Self::Error>
  *
  * For the moment at least we need a separate copy of this for each
- * distinct length, because arrays of symbolic length cause problems.
+ * distinct set of string lengths, because arrays of symbolic length
+ * cause problems.
  */
 let map_unpack_to_slice_spec (ms : [Int]) (smi : SorobanMIRItems) : MIRSetup () = do {
    // get an environment
@@ -1549,6 +1641,26 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       else
          return [];
    };
+   map_new_from_slices_overrides <- do {
+      if string_list.elem "map_new_from_slices" features then do {
+         let make (ms : [Int]) : TopLevel MIRSpec = do {
+            spec <- mir_unsafe_assume_spec mod
+               // either of these is a possible interception point
+               // (the first just calls the second)
+               "soroban_sdk::env::{impl#9}::map_new_from_slices"
+               //"soroban_env_guest::guest::{impl#0}::map_new_from_slices"
+               (map_new_from_slices_spec ms smi);
+            return spec;
+         };
+         // For now make just the one we're going to use (XXX: add more later,
+         // though we'll ultimately need a lot unless we can get it to work with
+         // indeterminate heterogeneous slices...)
+         spec_5_9 <- make [5, 9];
+         return [spec_5_9];
+      }
+      else
+         return [];
+   };
    map_unpack_to_slice_overrides <- do {
       if string_list.elem "map_unpack_to_slice" features then do {
          let make (ms : [Int]) : TopLevel MIRSpec = do {
@@ -1576,6 +1688,7 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       vec_get_overrides,
       vec_push_back_overrides,
       vec_new_from_slice_overrides,
+      map_new_from_slices_overrides,
       map_unpack_to_slice_overrides
    ]);
 };

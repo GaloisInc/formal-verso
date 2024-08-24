@@ -75,6 +75,20 @@ type Heap = HostHeap
 
 
 ////////////////////////////////////////////////////////////
+// array ops
+
+/* assign V for every key in KS */
+arrayScatterConstant : {a, b, n} fin n => Array a b -> [n] a -> b -> Array a b
+arrayScatterConstant arr ks v = arrs ! 0
+   where arrs = [arr] # [arrayUpdate arr' k v | arr' <- arrs | k <- ks]
+
+/* assign the corresponding V in VS for every key in KS */
+arrayScatterVals : {a, b, n} fin n => Array a b -> [n] a -> [n] b -> Array a b
+arrayScatterVals arr ks vs = arrs ! 0
+   where arrs = [arr] # [arrayUpdate arr' k v | arr' <- arrs | k <- ks | v <- vs]
+
+
+////////////////////////////////////////////////////////////
 // string representation
 
 /*
@@ -240,6 +254,15 @@ map_representation_singleton k v =
 map_representation_pair: RawRawVal -> RawRawVal -> RawRawVal -> RawRawVal -> MapRepresentation
 map_representation_pair k1 v1 k2 v2 =
    map_representation_add k2 v2 (map_representation_singleton k1 v1)
+
+/* Sequence */
+map_representation_seq: {n} n <= 0xffffffff => [n] RawRawVal -> [n] RawRawVal -> MapRepresentation
+map_representation_seq ks vs =
+   MapRepresentation { here = here, data = data }
+   where
+      here = arrayScatterConstant empty.here ks True
+      data = arrayScatterVals empty.data ks vs
+      empty = map_representation_empty
 
 /* Map used when an invalid/error version is needed */
 invalid_map_representation : MapRepresentation

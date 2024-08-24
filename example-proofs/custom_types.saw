@@ -9,7 +9,7 @@ Custom <- cryptol_load "CustomTypes.cry";
 mod <- mir_load_module "../soroban-examples/custom_types/target/linked-mir.json";
 
 // Initialize soroban verification with storage and symbol APIs
-soroban <- soroban_init mod ["storage", "symbol", "map_val", "map_unpack_to_slice", "u32_val"];
+soroban <- soroban_init mod ["storage", "symbol", "map_val", "map_new_from_slices", "map_unpack_to_slice", "u32_val"];
 
 // Compute Symbol value for STATE
 let STATE = {{ Values::symbol_from_native "STATE" }};

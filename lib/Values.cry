@@ -967,6 +967,10 @@ submodule MapObject where
          v2' = rawraw_of_val v2
          rep = HostValues::map_representation_pair k1' v1' k2' v2'
 
+   seq: {n} n < 0xffffffff => [n] Val -> [n] Val -> HostValues::Heap -> (HostValues::Heap, T)
+   seq ks vs state = from_maprep rep state
+      where rep = HostValues::map_representation_seq (rawraw_of_vals ks) (rawraw_of_vals vs)
+
    // lookups
    // these will all misbehave on nonexistent values; use valid_with_heap first
    // (XXX: using Option::crashing_unwrap crashes... look into why)
@@ -1101,6 +1105,7 @@ mapobj_invalid = MapObject::invalid
 mapobj_empty = MapObject::empty
 mapobj_singleton = MapObject::singleton
 mapobj_pair = MapObject::pair
+mapobj_seq = MapObject::seq
 mapobj_has_key = MapObject::has_key
 mapobj_get = MapObject::get
 mapobj_multiget = MapObject::multiget

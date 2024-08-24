@@ -655,13 +655,13 @@ let soroban_value_mapobj_1 k v heap = do {
 
 let soroban_value_mapobj_2 k1 v1 k2 v2 heap = do {
    let k1_to_raw = soroban_value_to_raw (type k1);
-   let k1_raw = {{ k_to_raw k1 }};
+   let k1_raw = {{ k1_to_raw k1 }};
    let v1_to_raw = soroban_value_to_raw (type v1);
-   let v1_raw = {{ k_to_raw v1 }};
+   let v1_raw = {{ v1_to_raw v1 }};
    let k2_to_raw = soroban_value_to_raw (type k2);
-   let k2_raw = {{ k_to_raw k2 }};
+   let k2_raw = {{ k2_to_raw k2 }};
    let v2_to_raw = soroban_value_to_raw (type v2);
-   let v2_raw = {{ k_to_raw v2 }};
+   let v2_raw = {{ v2_to_raw v2 }};
    return {{ Values::mapobj_pair k1_raw v1_raw k2_raw v2_raw heap }};
 };
 

@@ -214,7 +214,7 @@ let increment_spec = do {
   let last_val' = {{ Values::u32_from_native last_native' }};
 
   // allocate a new MapObject
-  heap'state_val' <- soroban_value_mapobj_2 {{ countsym }} count_val' {{ lastsym }} last_val' heap;
+  heap'state_val' <- soroban_value_mapobj_2 {{ Custom::countsym }} count_val' {{ Custom::lastsym }} last_val' heap;
   let heap' = {{ heap'state_val'.0 }};
   let state_val' = {{ heap'state_val'.1 }};
 

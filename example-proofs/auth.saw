@@ -22,10 +22,6 @@ let auth_spec = do {
   empty_auth <- soroban_auth_fresh ();
   let auth = soroban_declare_authorized empty_auth fresh_addr_obj;
 
-  soroban_storage_assert_state store;
-  soroban_hostheap_assert_state heap;
-  soroban_auth_assert_state auth;
-
   auth' <- soroban_auth_check_currentargs auth fresh_addr_obj;
 
   // TODO: Should be passing `fresh_addr_obj` wrapped by an instance of the `Counter` `DataKey` enum variant, not `fresh_obj_addr` itself.
@@ -35,6 +31,10 @@ let auth_spec = do {
 
   mir_precond {{ value < 42 }};
   mir_precond {{ native_count < 42 }};
+
+  soroban_storage_assert_state store;
+  soroban_hostheap_assert_state heap;
+  soroban_auth_assert_state auth;
 
   mir_execute_func [
         soroban.smi.EnvVal (),

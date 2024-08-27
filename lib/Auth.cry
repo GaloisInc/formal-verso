@@ -1,0 +1,28 @@
+module Auth where
+
+import Values as Values
+import submodule Values::AddressObject as Values::AddressObject
+import submodule Values::VecObject as Values::VecObject
+
+type T = Auth
+
+private
+   newtype Auth = {
+   }
+
+valid : Auth -> Bool
+valid auth = True
+
+/*
+ * XXX this is all stubbed out for now
+ */
+
+authorize: Auth -> Values::AddressObject::T -> Auth
+authorize auth _addr = auth
+
+check_noargs: Auth -> Values::AddressObject::T -> (Auth, Bool)
+check_noargs auth _addr = (auth, True)
+
+check_withargs: Auth -> Values::AddressObject::T -> Values::VecObject::T -> (Auth, Bool)
+check_withargs auth _addr _args = (auth, True)
+

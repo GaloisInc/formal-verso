@@ -12,6 +12,7 @@ Values <- cryptol_load "Values.cry";
 Store <- cryptol_load "Store.cry";
 Log <- cryptol_load "Log.cry";
 EventLog <- cryptol_load "EventLog.cry";
+Auth <- cryptol_load "Auth.cry";
 
 
 ////////////////////////////////////////////////////////////
@@ -2359,7 +2360,7 @@ let contract_event_spec (smi : SorobanMIRItems) = do {
 
 /*
  * Construct the "overrides" (checked or admitted SAW theorems, in
- * this case admitted) for the SDK storage interface.
+ * this case admitted) for the SDK event interface.
  */
 let make_events_overrides (smi : SorobanMIRItems) mod features = do {
    if string_list.elem "events" features then do {
@@ -2370,6 +2371,323 @@ let make_events_overrides (smi : SorobanMIRItems) mod features = do {
    }
    else
       return [];
+};
+
+
+////////////////////////////////////////////////////////////
+// authorization interface
+
+/*
+ * Spec for the authorization interface.
+ *
+ * On the host side, authorization is managed in terms of call graph
+ * fragments.
+ *
+ * AIUI from reading the documentation, what you do as the host when
+ * someone proposes to run a contract function F in contract C is as
+ * follows:
+ *    - examine the complete cross-contract call graph of F;
+ *    - identify where calls for authorization checks appear;
+ *    - fold intra-contract calls together;
+ *    - fold together chains of calls without authorization checks,
+ *      splitting into multiple cases if we drop the root;
+ *    - duplicate the graph for every distinct participating address;
+ *    - in the graph for address A drop all the authorization checks
+ *      that don't check A;
+ *    - again fold together chains of calls without authorization
+ *      checks, again splitting as needed;
+ *    - reject cyclic graphs, I guess;
+ *    - expand all diamonds in each graph (apparently) to make trees,
+ *      I guess.
+ *
+ * The documentation defines this "formally" but is actually very
+ * vague about it; in particular the question of diamonds in the
+ * call graph is completely unaddressed, and note that where the
+ * diamond expansion happens can affect what's actually generated.
+ *
+ * There's also no commentary in the documentation about how you
+ * identify which address is associated with each check; I guess since
+ * addresses are opaque handles that contracts can't really do
+ * anything with besides pass around, dataflow analysis combined with
+ * Rust restrictions and intentional Soroban limitations make it
+ * possible to figure out. But you'd at least think there'd be a
+ * warning about not doing things like writing a contract that takes a
+ * bool and two addresses and uses the bool to pick which one to use
+ * for authorization. Or things like that.
+ *
+ * Anyway, this collection of treeified call graphs is indexed by the
+ * address involved, then used as follows to actually make
+ * authorization checks as the code reaches them:
+ *    - get the call graph fragment list for the address requested;
+ *    - look for a fragment that matches the current call stack
+ *      (that is, the call chain associated with the current call
+ *      stack is a subgraph of it);
+ *    - check that the nodes in that fragment above the node
+ *      associated with the current contract function are marked used;
+ *    - (if this fragment hasn't been _authenticated_ yet, do that;
+ *      we can presumably ignore this here);
+ *    - mark the current node used;
+ *    - if any of this fails, panic and abort.
+ *
+ * The idea is that the chain A.foo -> B.bar -> C.baz can be
+ * authorized without authorizing a direct call A.foo -> C.baz.
+ *
+ * However, there's a bunch of unanswered questions so far.
+ *    - The idea of marking nodes used seems to be both to identify
+ *      the current state and also to prevent reusing authorizations
+ *      over and over again; however, if you actually want to be able
+ *      to call A.foo -> B.bar -> C.baz twice, there doesn't seem to
+ *      be any way for that to work. Unless contract code restrictions
+ *      mean that if you're doing that there must be two call sites
+ *      and you get two copies of the fragment? Or it unrolls loops
+ *      when generating the fragments? I thought bounded loops were
+ *      allowed.
+ *    - There are two purposes here, one of which is to check that the
+ *      invocations are structurally allowed, which is what all the
+ *      call graphs are about, but the other is making sure that
+ *      principals (behind the "addresses") actually intended to allow
+ *      the invocation. The process by which the latter happens is
+ *      not really described, or if it is I haven't found it yet. It
+ *      seems to be tucked into the "authenticate this fragment" step.
+ *    - Part of matching nodes in this thing involves argument values,
+ *      and I have not found any description of this yet either.
+ *      There's a confusing comment in the auth example about not
+ *      necessarily having to include an address (that's one of the
+ *      contract args) in the argument values tuple passed in for
+ *      checking, apparently because it's the same address passed as
+ *      the principal for the check, but this isn't super clear, and
+ *      it's not at all clear how you match arguments if some of them
+ *      can be randomly missing.
+ *
+ * There are probably things I'm missing or have misunderstood and/or
+ * pieces of the docs that I haven't found yet.
+ * 
+ * Anyway, there are two authorization hypercalls that we need specs
+ * for: 
+ *    - require_auth, which takes an address
+ *    - require_auth_for_args, which takes an address and an arg list
+ *
+ * The address is an AddressObject. These are opaque to contracts, so
+ * we can just use fresh ones everywhere.
+ *
+ * The argument list, if present, is a VecObject that's a translation
+ * from a tuple. If the argument list isn't present, the args passed
+ * to the contract function are used implicitly.
+ *
+ * This presents a problem, or at least a hassle: we need the
+ * underlying model to include those args and they need to be passed
+ * in, in case the contract calls the plain version of the hypercall.
+ *
+ * As a starting point, I'm going to ignore all the cross-contract
+ * structure and call graph material (we'll presumably want that
+ * sooner or later, but right now we have no way to address most of
+ * it even if we build the model) and stick to "is this invocation
+ * authorized?".
+ */
+
+typedef SorobanAuthState = {
+   ghoststate : Ghost
+};
+
+soroban_auth_state <- do {
+   ghoststate <- declare_ghost_state "Soroban::auth";
+   let state = {
+      ghoststate = ghoststate
+   };
+   return state;
+};
+
+/*
+ * Extract the internally tracked model of the auth system.
+ *
+ * There isn't a get operation for SAWscript ghost variables (yet) but
+ * allocating a fresh var and asserting equality to the existing state
+ * is an adequate workaround.
+ *
+ * Note that it's ok to do this using the implicitly defined
+ * bit-level/SMT-level equality inside mir_ghost_value; it will get us
+ * a model that's physically identical to the current one. Then we can
+ * check for equivalence between that one and another one using the
+ * proper equivalence function.
+ */
+let soroban_auth_get_state () : MIRSetup Term = do {
+   state <- mir_fresh_cryptol_var "Soroban::auth::get_state" {| Auth::T |};
+   mir_ghost_value soroban_auth_state.ghoststate state;
+   return state;
+};
+
+/*
+ * Assert equivalence of the internally tracked model of the auth
+ * system contents (what we saw when executing) with a new Auth
+ * (what's expected).
+ */
+let soroban_auth_assert_state (auth : Term /* Auth */) : MIRSetup () = do {
+   mir_ghost_value soroban_auth_state.ghoststate auth;
+};
+
+/*
+ * Ops on the auth system. These are wrappers around the Cryptol model.
+ */
+
+/*
+ * Contract-facing way to get a fresh auth system.
+ *
+ * XXX: this should take the current contract args so we have them on
+ * file. But not yet.
+ */
+let soroban_auth_fresh () = do {
+   auth <- mir_fresh_cryptol_var "auth::auth" {| Auth::T |};
+   mir_assert {{ Auth::valid auth }};
+   return auth;
+};
+
+/*
+ * Contract-facing way to add an authorization.
+ *
+ * XXX: this should always take an arglist.
+ */
+let soroban_declare_authorized (auth : Term /* Auth */) (addr : Term /* Address */) =
+   let auth' = {{ Auth::authorize auth addr }} in
+   auth'
+;
+
+/*
+ * Contract-facing check with current args (no args given_
+ */
+let soroban_auth_check_currentargs auth addr = do {
+   let auth'result = {{ Auth::check_noargs auth addr }};
+   let auth' = {{ auth'result.0 }};
+   let _result = {{ auth'result.1 }};
+   return auth';
+};
+
+let soroban_auth_check_with_args auth addr args = do {
+   let auth'result = {{ Auth::check_args auth addr args }};
+   let auth' = {{ auth'result.0 }};
+   let _result = {{ auth'result.1 }};
+   return auth';
+};
+
+/*
+ * Specs for the SDK code.
+ */
+
+/*
+ * require_auth(env: Env, address: AddressObject) ->
+ *    Result<Void, Self::Error>
+ */
+let require_auth_spec (smi : SorobanMIRItems) = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get an address
+   addr <- soroban_value_fresh "require_auth::addr" {| Values::AddressObjectT|};
+   let mir_addr = soroban_value_to_mir smi addr;
+
+   // get an authorization system model
+   auth <- mir_fresh_cryptol_var "require_auth::auth" {| Auth::T |};
+   mir_assert {{ Auth::valid auth }};
+
+   // bind the SDK state
+   soroban_auth_assert_state auth;
+
+   // call the function
+   mir_execute_func [self, mir_addr];
+
+   // do the check in the model (it potentially updates the model)
+   let auth'result = {{ Auth::check_noargs auth addr }};
+   let auth' = {{ auth'result.0 }};
+   let result = {{ auth'result.1 }};
+
+   // rebind the SDK state
+   soroban_auth_assert_state auth';
+
+   // we should have succeeded
+   mir_assert {{ result }};
+
+   // return void (hypercall always succeeds, it crashes on failure)
+   // except apparently it's returned as a RawVal
+   return_ok smi {{ Values::void_to_raw Values::unit }};
+};
+
+/*
+ * require_auth(env: Env, address: AddressObject, args: VecObject) ->
+ *    Result<Void, Self::Error>
+ */
+let require_auth_with_args_spec (smi : SorobanMIRItems) = do {
+   // get an environment
+   self <- mir_alloc (mir_adt (smi.EnvType ()));
+   mir_points_to self (smi.EnvVal ());
+
+   // get an address
+   addr <- soroban_value_fresh "require_auth_with_args::addr" {| Values::AddressObjectT|};
+   let mir_addr = soroban_value_to_mir smi addr;
+
+   // get a vector for the args
+   args <- soroban_value_fresh "require_auth_with_args::args" {| Values::VecObjectT |};
+   let mir_args = soroban_value_to_mir smi args;
+
+   // get a host heap, which has a mapping for the VecObject
+   heap <- mir_fresh_cryptol_var "require_auth_with_args::heap" {| Values::HostHeap |};
+   mir_assert {{ Values::vecobj_valid_with_heap args heap }};
+
+   // get an authorization system model
+   auth <- mir_fresh_cryptol_var "require_auth_with_args::auth" {| Auth::T |};
+   mir_assert {{ Auth::valid auth }};
+
+   // bind the SDK state
+   soroban_hostheap_assert_state heap;
+   soroban_auth_assert_state auth;
+
+   // call the function
+   mir_execute_func [self, mir_addr, mir_args];
+
+   // do the check in the model (it potentially updates the model)
+   let auth'result = {{ Auth::check_withargs auth addr args }};
+   let auth' = {{ auth'result.0 }};
+   let result = {{ auth'result.1 }};
+
+   // rebind the SDK state
+   soroban_auth_assert_state auth';
+
+   // we should have succeeded
+   mir_assert {{ result }};
+
+   // return void (hypercall always succeeds, it crashes on failure)
+   // except apparently it's returned as a RawVal
+   return_ok smi {{ Values::void_to_raw Values::unit }};
+};
+
+/*
+ * Construct the "overrides" (checked or admitted SAW theorems, in
+ * this case admitted) for the SDK auth interface.
+ */
+let make_auth_overrides (smi : SorobanMIRItems) mod features = do {
+   require_auth_overrides <- do {
+      if string_list.elem "require_auth" features then do {
+         require_auth_spec <- mir_unsafe_assume_spec mod
+            "soroban_sdk::env::{impl#12}::require_auth"
+            (require_auth_spec smi);
+         return [require_auth_spec];
+      }
+      else
+         return [];
+   };
+   require_auth_with_args_overrides <- do {
+      if string_list.elem "require_auth_with_args" features then do {
+         require_auth_with_args_spec <- mir_unsafe_assume_spec mod
+            "soroban_sdk::env::{impl#12}::require_auth_with_args"
+            (require_auth_with_args_spec smi);
+         return [require_auth_with_args_spec];
+      }
+      else
+         return [];
+   };
+   return (list.concats [
+      require_auth_overrides,
+      require_auth_with_args_overrides
+   ]);
 };
 
 
@@ -2434,11 +2752,14 @@ let soroban_init (mod : MIRModule) (features : [String]) : TopLevel SorobanAPI =
    hostvalue_overrides <- make_hostvalue_overrides smi mod features;
    logging_overrides <- make_logging_overrides smi mod features;
    events_overrides <- make_events_overrides smi mod features;
+   auth_overrides <- make_auth_overrides smi mod features;
 
    // note: "concat" is what's usually called append
    let sdk_overrides = concat
        (concat hostvalue_overrides storage_overrides)
-       (concat logging_overrides events_overrides);
+       (concat
+          (concat logging_overrides events_overrides)
+          auth_overrides);
 
    return {
       mod = mod,

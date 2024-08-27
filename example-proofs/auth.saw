@@ -7,28 +7,8 @@ include "../lib/soroban.saw";
 mod <- mir_load_module "../soroban-examples/auth/target/linked-mir.json";
 
 // Initialize soroban verification with address API
-soroban <- soroban_init mod ["address", "storage", "vec_val", "vec_new_from_slice"];
+soroban <- soroban_init mod ["address", "require_auth", "storage", "vec_val", "vec_new_from_slice"];
 
-
-// NOP spec for require_auth
-// TODO: Modify this to actually inspect whether the invocation is authorized
-let addr_require_auth_spec = do {
-
-  address_obj <- soroban_value_fresh "address_obj" {| Values::AddressObjectT|};
-  let address_obj_mir = soroban_value_to_mir soroban.smi address_obj;
-  let address = mir_struct_value (soroban.smi.AddressType ()) [soroban.smi.EnvVal(), address_obj_mir];
-
-  self <- mir_alloc (mir_adt (soroban.smi.AddressType ()));
-  mir_points_to self address;
-
-  mir_execute_func [
-    self
-  ];
-};
-
-addr_require_auth_ov <- mir_unsafe_assume_spec mod
-        "soroban_sdk::address::{impl#9}::require_auth"
-        (addr_require_auth_spec);
 
 let auth_spec = do {
 
@@ -39,9 +19,14 @@ let auth_spec = do {
 
   store <- mir_fresh_cryptol_var "store" {| Store::T |};
   heap <- mir_fresh_cryptol_var "hostheap" {| Values::HostHeap |};
+  empty_auth <- soroban_auth_fresh ();
+  let auth = soroban_declare_authorized empty_auth fresh_addr_obj;
 
   soroban_storage_assert_state store;
   soroban_hostheap_assert_state heap;
+  soroban_auth_assert_state auth;
+
+  auth' <- soroban_auth_check_currentargs auth fresh_addr_obj;
 
   // TODO: Should be passing `fresh_addr_obj` wrapped by an instance of the `Counter` `DataKey` enum variant, not `fresh_obj_addr` itself.
   let user_counter_val = soroban_store_get store fresh_addr_obj {| Values::U32T |};
@@ -61,6 +46,7 @@ let auth_spec = do {
   let count' = {{ Values::u32_from_native native_count' }};
 
   soroban_storage_assert_state (soroban_store_set store fresh_addr_obj count');
+  soroban_auth_assert_state auth';
 
   mir_return (mir_term native_count');
 };
@@ -69,7 +55,7 @@ soroban_verify soroban {
   // Name of function in MIR
   fun = "soroban_auth_contract::{impl#4}::increment",
   // Additional overrides
-  overrides = [addr_require_auth_ov],
+  overrides = [],
   // Path satisfiability
   path_sat = true,
   // Specification

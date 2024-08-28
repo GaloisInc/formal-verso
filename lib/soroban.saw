@@ -13,6 +13,7 @@ Store <- cryptol_load "Store.cry";
 Log <- cryptol_load "Log.cry";
 EventLog <- cryptol_load "EventLog.cry";
 Auth <- cryptol_load "Auth.cry";
+DataKeyEnum <- cryptol_load "../example_proofs/DataKeyEnum.cry";
 
 
 ////////////////////////////////////////////////////////////
@@ -348,6 +349,9 @@ let soroban_value_to_raw (t : Type) : Term =
       {{ Values::mapobj_to_raw }}
    else if type_eq t {| Values::AddressObjectT |} then
       {{ Values::addressobj_to_raw }}
+   else if type_eq t {| DataKeyEnum::T |} then
+      // TODO soroban.saw probably shouldn't depend on DataKeyEnum.cry...
+      {{ DataKeyEnum::to_raw }}
    else
       run (fail (str_concat (show t) " cannot be converted to Raw"));
 

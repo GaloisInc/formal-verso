@@ -1,0 +1,12 @@
+import Values as Values
+import HostValues as HostValues
+import submodule Values::VecObject as Values::VecObject
+import submodule Values::Raw as Values::Raw
+
+type T = (Values::SymbolT, Values::AddressObjectT)
+
+to_raw : Values::VecObject::T -> Values::Val
+to_raw vecobj = Values::VecObject::to_raw vecobj
+
+from_native : T -> HostValues::Heap -> Values::VecObject::T
+from_native v heap = (Values::VecObject::pair v.0.val v.1.val heap).1

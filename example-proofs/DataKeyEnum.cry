@@ -1,3 +1,5 @@
+module DataKeyEnum where
+
 import Values as Values
 import HostValues as HostValues
 import submodule Values::VecObject as Values::VecObject

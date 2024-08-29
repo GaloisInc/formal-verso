@@ -10,6 +10,8 @@
  * field names as keys and the values being Values::U32::T.
  */
 
+module CustomTypes where
+
 import Option as Option
 import Values as Values
 import submodule Values::Symbol as Values::Symbol

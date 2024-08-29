@@ -89,7 +89,7 @@ let make_soroban_mir_items mod features : SorobanMIRItems =
     */
 
    // non-soroban
-   let InfallibleType = find_adt "core::convert::Infallible" in
+   let InfallibleType = find_adt_when "core" "core::convert::Infallible" in
    let ResultInfallibleType (t : MIRType) =
       mir_find_adt mod "core::result::Result" [t, mir_adt (InfallibleType ())]
    in

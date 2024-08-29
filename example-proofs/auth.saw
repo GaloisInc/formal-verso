@@ -9,7 +9,7 @@ DataKeyEnum <- cryptol_load "DataKeyEnum.cry";
 mod <- mir_load_module "../soroban-examples/auth/target/linked-mir.json";
 
 // Initialize soroban verification with address API
-soroban <- soroban_init mod ["address", "require_auth", "storage", "vec_val", "vec_new_from_slice"];
+soroban <- soroban_init mod ["address", "require_auth", "storage", "vec_val", "vec_new_from_slice", "core"];
 
 
 let auth_spec = do {

@@ -8,7 +8,7 @@ mod_b <- mir_load_module "../soroban-examples/cross_contract/contract_b/target/l
 
 // Initialize soroban verification
 soroban_a <- soroban_init mod_a ["u32_val"];
-soroban_b <- soroban_init mod_b ["call", "address_to_contract_id", "vec_new_from_slice", "vec_val", "address", "u32_val"];
+soroban_b <- soroban_init mod_b ["call", "address_to_contract_id", "vec_new_from_slice", "vec_val", "address", "u32_val", "core"];
 
 // Specification for add in contract A
 let add_spec = do {

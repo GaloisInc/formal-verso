@@ -7,7 +7,7 @@ include "../lib/soroban.saw";
 mod <- mir_load_module "../extra-examples/sqrt/target/linked-mir.json";
 
 // Initialize soroban verification with storage API
-soroban <- soroban_init mod ["u32_val", "storage"];
+soroban <- soroban_init mod ["u32_val", "storage", "core"];
 
 // Declare specification for log2 function
 let log2_spec = do {

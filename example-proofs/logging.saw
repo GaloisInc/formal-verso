@@ -8,7 +8,7 @@ mod <- mir_load_module "../soroban-examples/logging/target/linked-mir.json";
 
 // Initialize soroban verification with logging API and symbols,
 // plus string and vector values
-soroban <- soroban_init mod ["logging", "symbol", "str_val", "string_new_from_slice", "vec_val", "vec_new", "vec_push_back", "u32_val"];
+soroban <- soroban_init mod ["logging", "symbol", "str_val", "string_new_from_slice", "vec_val", "vec_new", "vec_push_back", "u32_val", "core"];
 
 // Specification for hello function
 let hello_spec = do {

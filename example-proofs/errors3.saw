@@ -7,7 +7,7 @@ include "../lib/soroban.saw";
 mod <- mir_load_module "../soroban-examples/errors/target/linked-mir.json";
 
 // Initialize soroban verification with storage and symbol APIs
-soroban <- soroban_init mod ["storage", "symbol", "u32_val"];
+soroban <- soroban_init mod ["storage", "symbol", "u32_val", "core"];
 
 // Compute Symbol value for COUNTER
 let COUNTER = {{ Values::symbol_from_native "COUNTER" }};

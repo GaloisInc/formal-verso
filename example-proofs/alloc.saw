@@ -7,7 +7,7 @@ include "../lib/soroban.saw";
 mod <- mir_load_module "../soroban-examples/alloc/target/linked-mir.json";
 
 // Initialize soroban verification with no extra features
-soroban <- soroban_init mod [];
+soroban <- soroban_init mod ["core"];
 
 // Declare parameterized specification for sum function
 // SAW does not support unbounded loops, so we parameterize the spec by a SAW

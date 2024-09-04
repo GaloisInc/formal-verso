@@ -1023,6 +1023,9 @@ submodule AddressObject where
    to_raw : T -> Val
    to_raw vs = vs.val
 
+   eq: T -> T -> Bool
+   eq v1 v2 = v1.val.bits == v2.val.bits
+
 
 ////////////////////////////////////////////////////////////
 // workarounds for saw-script #1964
@@ -1112,6 +1115,7 @@ mapobj_multiget = MapObject::multiget
 
 addressobj_valid = AddressObject::valid
 addressobj_to_raw = AddressObject::to_raw
+addressobj_eq = AddressObject::eq
 
 // don't do this; it seems to crash (XXX: figure out why and fix it)
 //raw_valid = Raw::val_is_good

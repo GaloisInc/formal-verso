@@ -289,7 +289,15 @@ private
            where
               handle1 = major_of_val v1
               handle2 = major_of_val v2
-      // TODO (RP) - added AddressObject case
+      | tag1 == tag_addressobject then
+
+           // AddressObjects don't contain other things; they're
+           // opaque blobs. Two are equal if they have the same bits.
+           // (and only the major field is significant)
+           handle1 == handle2
+           where
+              handle1 = major_of_val v1
+              handle2 = major_of_val v2
       else False
       where
          tag1 = tag_of_val v1

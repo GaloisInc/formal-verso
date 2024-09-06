@@ -1033,7 +1033,7 @@ submodule AddressObject where
    to_raw vs = vs.val
 
    eq: T -> T -> Bool
-   eq v1 v2 = v1.val.bits == v2.val.bits
+   eq v1 v2 = small_val_eq v1.val v2.val
 
 
 ////////////////////////////////////////////////////////////

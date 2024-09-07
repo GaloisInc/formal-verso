@@ -11,6 +11,8 @@ mod <- mir_load_module "../soroban-examples/auth/target/linked-mir.json";
 // Initialize soroban verification with address API
 soroban <- soroban_init mod ["address", "require_auth", "storage", "vec_val", "vec_new_from_slice"];
 
+// get a Symbol for the function name
+let incrsym = {{ Values::symbol_from_native "increment" }};
 
 let auth_spec = do {
 
@@ -21,10 +23,10 @@ let auth_spec = do {
 
   store <- mir_fresh_cryptol_var "store" {| Store::T |};
   heap <- mir_fresh_cryptol_var "hostheap" {| Values::HostHeap |};
-  empty_auth <- soroban_auth_fresh ();
-  let auth = soroban_declare_authorized empty_auth fresh_addr_obj;
+  empty_auth <- soroban_auth_fresh heap incrsym;
+  let auth = soroban_declare_authorized empty_auth fresh_addr_obj {{ [incrsym] }};
 
-  auth' <- soroban_auth_check_currentargs auth fresh_addr_obj;
+  auth' <- soroban_auth_check_currentargs heap auth fresh_addr_obj;
 
   key <- mir_fresh_cryptol_var "DataKey::Counter" {| (Values::SymbolT, Values::AddressObjectT) |};
   // TODO - need the AddressObj to be the same as the fresh one above

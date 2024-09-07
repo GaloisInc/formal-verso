@@ -2539,9 +2539,11 @@ let soroban_auth_assert_state (auth : Term /* Auth */) : MIRSetup () = do {
  * XXX: this should take the current contract args so we have them on
  * file. But not yet.
  */
-let soroban_auth_fresh () = do {
+let soroban_auth_fresh (heap: Term /*HostHeap*/) (sym : Term /*Symbol*/) = do {
    auth <- mir_fresh_cryptol_var "auth::auth" {| Auth::T |};
    mir_assert {{ Auth::valid auth }};
+   mir_assert {{ Auth::invocation heap auth sym }};
+   mir_assert {{ Auth::initial auth }};
    return auth;
 };
 
@@ -2550,23 +2552,26 @@ let soroban_auth_fresh () = do {
  *
  * XXX: this should always take an arglist.
  */
-let soroban_declare_authorized (auth : Term /* Auth */) (addr : Term /* Address */) =
-   let auth' = {{ Auth::authorize auth addr }} in
+let soroban_declare_authorized (auth : Term /* Auth */) (addr : Term /* Address */) (nodes : Term /* list of symbols */)=
+   let auth' = {{ Auth::authorize auth addr nodes }} in
    auth'
 ;
 
 /*
- * Contract-facing check with current args (no args given_
+ * Contract-facing check with current args (no explicit arglist given)
  */
-let soroban_auth_check_currentargs auth addr = do {
-   let auth'result = {{ Auth::check_noargs auth addr }};
+let soroban_auth_check_currentargs heap auth addr = do {
+   let auth'result = {{ Auth::check_noargs heap auth addr }};
    let auth' = {{ auth'result.0 }};
    let _result = {{ auth'result.1 }};
    return auth';
 };
 
-let soroban_auth_check_with_args auth addr args = do {
-   let auth'result = {{ Auth::check_args auth addr args }};
+/*
+ * Contract-facing check with explicit argument list
+ */
+let soroban_auth_check_with_args heap auth addr args = do {
+   let auth'result = {{ Auth::check_args heap auth addr args }};
    let auth' = {{ auth'result.0 }};
    let _result = {{ auth'result.1 }};
    return auth';
@@ -2589,22 +2594,27 @@ let require_auth_spec (smi : SorobanMIRItems) = do {
    addr <- soroban_value_fresh "require_auth::addr" {| Values::AddressObjectT|};
    let mir_addr = soroban_value_to_mir smi addr;
 
+   // get a heap
+   heap <- mir_fresh_cryptol_var "require_auth::heap" {| Values::HostHeap |};
+
    // get an authorization system model
    auth <- mir_fresh_cryptol_var "require_auth::auth" {| Auth::T |};
    mir_assert {{ Auth::valid auth }};
 
    // bind the SDK state
+   soroban_hostheap_assert_state heap;
    soroban_auth_assert_state auth;
 
    // call the function
    mir_execute_func [self, mir_addr];
 
    // do the check in the model (it potentially updates the model)
-   let auth'result = {{ Auth::check_noargs auth addr }};
+   let auth'result = {{ Auth::check_noargs heap auth addr }};
    let auth' = {{ auth'result.0 }};
    let result = {{ auth'result.1 }};
 
    // rebind the SDK state
+   soroban_hostheap_assert_state heap;
    soroban_auth_assert_state auth';
 
    // we should have succeeded

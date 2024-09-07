@@ -2384,90 +2384,18 @@ let make_events_overrides (smi : SorobanMIRItems) mod features = do {
 /*
  * Spec for the authorization interface.
  *
+ * On the guest side, authorization is pretty much limited to "are we
+ * authorized? if not, panic". However, we want a model of what's
+ * happening on the host side in order to eventually be able to
+ * reason about authorization of cross-contract calls.
+ *
  * On the host side, authorization is managed in terms of call graph
  * fragments.
  *
- * AIUI from reading the documentation, what you do as the host when
- * someone proposes to run a contract function F in contract C is as
- * follows:
- *    - examine the complete cross-contract call graph of F;
- *    - identify where calls for authorization checks appear;
- *    - fold intra-contract calls together;
- *    - fold together chains of calls without authorization checks,
- *      splitting into multiple cases if we drop the root;
- *    - duplicate the graph for every distinct participating address;
- *    - in the graph for address A drop all the authorization checks
- *      that don't check A;
- *    - again fold together chains of calls without authorization
- *      checks, again splitting as needed;
- *    - reject cyclic graphs, I guess;
- *    - expand all diamonds in each graph (apparently) to make trees,
- *      I guess.
+ * See Auth.cry for a description (that's the current best
+ * understanding and not necessarily correct).
  *
- * The documentation defines this "formally" but is actually very
- * vague about it; in particular the question of diamonds in the
- * call graph is completely unaddressed, and note that where the
- * diamond expansion happens can affect what's actually generated.
- *
- * There's also no commentary in the documentation about how you
- * identify which address is associated with each check; I guess since
- * addresses are opaque handles that contracts can't really do
- * anything with besides pass around, dataflow analysis combined with
- * Rust restrictions and intentional Soroban limitations make it
- * possible to figure out. But you'd at least think there'd be a
- * warning about not doing things like writing a contract that takes a
- * bool and two addresses and uses the bool to pick which one to use
- * for authorization. Or things like that.
- *
- * Anyway, this collection of treeified call graphs is indexed by the
- * address involved, then used as follows to actually make
- * authorization checks as the code reaches them:
- *    - get the call graph fragment list for the address requested;
- *    - look for a fragment that matches the current call stack
- *      (that is, the call chain associated with the current call
- *      stack is a subgraph of it);
- *    - check that the nodes in that fragment above the node
- *      associated with the current contract function are marked used;
- *    - (if this fragment hasn't been _authenticated_ yet, do that;
- *      we can presumably ignore this here);
- *    - mark the current node used;
- *    - if any of this fails, panic and abort.
- *
- * The idea is that the chain A.foo -> B.bar -> C.baz can be
- * authorized without authorizing a direct call A.foo -> C.baz.
- *
- * However, there's a bunch of unanswered questions so far.
- *    - The idea of marking nodes used seems to be both to identify
- *      the current state and also to prevent reusing authorizations
- *      over and over again; however, if you actually want to be able
- *      to call A.foo -> B.bar -> C.baz twice, there doesn't seem to
- *      be any way for that to work. Unless contract code restrictions
- *      mean that if you're doing that there must be two call sites
- *      and you get two copies of the fragment? Or it unrolls loops
- *      when generating the fragments? I thought bounded loops were
- *      allowed.
- *    - There are two purposes here, one of which is to check that the
- *      invocations are structurally allowed, which is what all the
- *      call graphs are about, but the other is making sure that
- *      principals (behind the "addresses") actually intended to allow
- *      the invocation. The process by which the latter happens is
- *      not really described, or if it is I haven't found it yet. It
- *      seems to be tucked into the "authenticate this fragment" step.
- *    - Part of matching nodes in this thing involves argument values,
- *      and I have not found any description of this yet either.
- *      There's a confusing comment in the auth example about not
- *      necessarily having to include an address (that's one of the
- *      contract args) in the argument values tuple passed in for
- *      checking, apparently because it's the same address passed as
- *      the principal for the check, but this isn't super clear, and
- *      it's not at all clear how you match arguments if some of them
- *      can be randomly missing.
- *
- * There are probably things I'm missing or have misunderstood and/or
- * pieces of the docs that I haven't found yet.
- * 
- * Anyway, there are two authorization hypercalls that we need specs
- * for: 
+ * There are two authorization hypercalls that we need specs for: 
  *    - require_auth, which takes an address
  *    - require_auth_for_args, which takes an address and an arg list
  *
@@ -2476,17 +2404,15 @@ let make_events_overrides (smi : SorobanMIRItems) mod features = do {
  *
  * The argument list, if present, is a VecObject that's a translation
  * from a tuple. If the argument list isn't present, the args passed
- * to the contract function are used implicitly.
+ * to the contract function are used implicitly. And they're used
+ * implicitly on the _host_ side; they don't get allocated into a
+ * VecObject in the guest. We therefore can't use a VecObject to hold
+ * them; we need some other representation of argument lists.
  *
- * This presents a problem, or at least a hassle: we need the
- * underlying model to include those args and they need to be passed
- * in, in case the contract calls the plain version of the hypercall.
- *
- * As a starting point, I'm going to ignore all the cross-contract
- * structure and call graph material (we'll presumably want that
- * sooner or later, but right now we have no way to address most of
- * it even if we build the model) and stick to "is this invocation
- * authorized?".
+ * For the moment we're going to just not handle argument lists and
+ * assume that the arguments that appear (implicitly or explicitly)
+ * are the ones that were authorized. XXX: this is obviously
+ * insufficient. However, it's adequate for immediate requirements.
  */
 
 typedef SorobanAuthState = {
@@ -2550,7 +2476,8 @@ let soroban_auth_fresh (heap: Term /*HostHeap*/) (sym : Term /*Symbol*/) = do {
 /*
  * Contract-facing way to add an authorization.
  *
- * XXX: this should always take an arglist.
+ * XXX: this should always take an arglist. In some representation that
+ * isn't a VecObject, for the reasons cited above.
  */
 let soroban_declare_authorized (auth : Term /* Auth */) (addr : Term /* Address */) (nodes : Term /* list of symbols */)=
    let auth' = {{ Auth::authorize auth addr nodes }} in

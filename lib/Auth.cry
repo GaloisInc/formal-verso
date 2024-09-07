@@ -6,7 +6,144 @@ import submodule Values::AddressObject as Values::AddressObject
 import submodule Values::VecObject as Values::VecObject
 
 /*
- * XXX this is all stubbed out for now
+ * Model for the Soroban SDK authorization system.
+ *
+ * The basis of the authorization system is a concept of call-graph
+ * fragments.
+ *
+ * As I understand it (note that my understanding is based on a lot of
+ * guesswork because the documentation is not very clear, and may be
+ * quite wrong so far) this probably works as follows:
+ *
+ * 1. Each call-graph fragment is associated with a particular
+ * Address, and represents a projection of a contract execution call
+ * graph where (a) all functions in a given contract are folded
+ * together, and (b) contracts that don't make authorization calls
+ * about the Address in question are dropped. Chains or subgraphs of
+ * dropped nodes are replaced with a single edge. Nodes dropped at the
+ * root of the graph are dropped completely.
+ *
+ * Thus, a fragment (a, f -> g -> h) represents a call chain from f to
+ * g to h, where f, g, and h each make an authorization check on
+ * address a. This allows f to call g and then g to call h, but does
+ * not allow f to call h directly, or allow either g or h to be called
+ * spontaneously rather than starting from f. However, other contracts
+ * that don't check for authorization from a can be interspersed
+ * freely.
+ *
+ * These fragments are described as trees rather than graphs; it
+ * appears that each end corresponds to a single invocation, not a
+ * general ability to invoke. So for a situation where f calls g
+ * twice, and each call to g calls h, you write a fragment of the
+ * form
+ *       f --> g -> h
+ *         \-> g -> h
+ * rather than either the form
+ *       f --> g --> h
+ *         \-> g -/
+ * or just
+ *       f -> g -> h
+ * but this is not totally clear. It is also not clear if these
+ * two fragments are different:
+ *       f --> g -> w
+ *         \-> g -> z
+ * and
+ *       f --> g -> z
+ *         \-> g -> w
+ * that is, whether the sub-nodes are ordered or not.
+ *
+ * 2. When we start executing we have some collection of call graph
+ * fragments that we're allowed to execute; these have been signed
+ * by the principal behind the Address associated with the fragment.
+ *
+ * 3. During execution, when an authorization call happens, we search
+ * for a fragment with an unused node matching it that will let us
+ * conclude the call is authorized. Then we mark off the node we just
+ * matched in the fragment as used. When all the nodes in the fragment
+ * have been used, the whole fragment is marked used and/or discarded.
+ *
+ * 4. It appears that a node in a fragment matches if:
+ *    - it names the same contract
+ *    - the enclosed arguments list matches (see further notes below)
+ *    - and either:
+ *         - it is the root of the fragment
+ *         - it is the (or a) next unused node in the fragment and its
+ *           parent in the fragment is still in the current call chain
+ *
+ * That is, as you execute you pick fragments that authorize you to
+ * execute, and these authorize particular patterns of calls, which
+ * then get discharged and marked used one at a time. If/once
+ * execution deviates from the pattern the fragment can no longer
+ * authorize further calls.
+ *
+ * As noted above, it's unclear if the patterns of calls are intended
+ * to be ordered. Thus, given the example
+ *       f --> g -> w
+ *         \-> g -> z
+ * it's not clear if the sequence
+ *    call f, call g, call z, return z, return g, call g, call w, return all
+ * is potentially authorized or only the sequence
+ *    call f, call g, call w, return z, return g, call g, call w, return all
+ * though it is definitely the case that just
+ *    call f, call g, call z, return z, return g, return f
+ * or
+ *    call f, call g, call w, return w, return g, return f
+ * are authorized, and
+ *    call f, call g, call z, return z, call w
+ * is not.
+ *
+ * It's also unclear if you can have more than one active fragment for
+ * the same Address at a time. That is, if you have the two fragments
+ *       f -> g -> w
+ *       g -> z
+ * it's not clear if this sequence is authorized:
+ *    call f, call g, call z, return z, return g, call g, call w, return all
+ * because it uses the g -> z fragment while the other fragment is
+ * partially discharged and then returns to using it. Similarly, it's
+ * not clear if the sequence
+ *    call f, call g, call z, call g, call w, return z, return w, return all
+ * with two live invocations of g at once is supposed to be
+ * authorized. From the apparent intent of the system it seems like
+ * the first should be authorized but not the second, but it's hard to
+ * see how they can readily be distinguished.
+ *
+ * Finally, if there are multiple possibly matching fragments, it's
+ * not clear which you select to match, and contrary to a vague
+ * statement in the docs, it does matter. For example, given these
+ * two fragments:
+ *       f -> g -> w
+ *       f -> g -> z
+ * which do you pick to start using and mark partially used when a
+ * sequence begins with call f? It seems like to satisfy the apparent
+ * intent of the system you have to choose both nondeteriminstically
+ * and only resolve which one you actually mark used when it becomes
+ * unambiguous. (And if you still have multiple potentially used
+ * fragments when you're done executing, which do you pick? If they're
+ * the same it doesn't matter, and if one's a subgraph of another it's
+ * clear you should pick the smaller one, but in general there's no
+ * obvious answer.)
+ *
+ * 5. In addition to the structural matching described above, each
+ * node also has a list of values in it, which correspond to the
+ * arguments to be passed to the function. These need to be matched at
+ * runtime by the arguments given. It isn't clear how these values are
+ * supposed to be matched and the documentation is silent, but it
+ * appears the intent is just an equality test: the values found at
+ * runtime should be the same list as the values found in the fragment.
+ *
+ * There are two variants of the authorization hypercall, one of which
+ * defaults to the argument list from the current invocation, and the
+ * other of which takes an explicit argument list. It seems the idea
+ * is that the latter can be arbitrary (though related somehow to the
+ * current invocation) and the person creating the authorization
+ * fragments is supposed to know what'll be posted at runtime so they
+ * can include the right list of values in their fragments. This
+ * allows e.g. suppressing arguments that are irrelevant to the
+ * Address being consulted.
+ */
+
+/*
+ * XXX this is all stubbed out for now.
  */
 
 type T = Auth

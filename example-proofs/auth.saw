@@ -22,7 +22,11 @@ let auth_spec = do {
   value <- mir_fresh_var "value" mir_u32;
 
   store <- mir_fresh_cryptol_var "store" {| Store::T |};
+
   heap <- mir_fresh_cryptol_var "hostheap" {| Values::HostHeap |};
+  // The heap needs to be able to allocate at least twice.
+  mir_assert {{ Values::heap_has_space heap 2 }};
+
   empty_auth <- soroban_auth_fresh heap incrsym;
   let auth = soroban_declare_authorized empty_auth fresh_addr_obj {{ [incrsym] }};
 

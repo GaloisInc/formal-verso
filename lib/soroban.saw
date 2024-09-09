@@ -2549,7 +2549,7 @@ let require_auth_spec (smi : SorobanMIRItems) = do {
 };
 
 /*
- * require_auth(env: Env, address: AddressObject, args: VecObject) ->
+ * require_auth_with_args(env: Env, address: AddressObject, args: VecObject) ->
  *    Result<Void, Self::Error>
  */
 let require_auth_with_args_spec (smi : SorobanMIRItems) = do {

@@ -140,34 +140,366 @@ import submodule Values::VecObject as Values::VecObject
  * can include the right list of values in their fragments. This
  * allows e.g. suppressing arguments that are irrelevant to the
  * Address being consulted.
+ *
+ * Given all the uncertainty above, and given that the more complete
+ * model I started out with completely overwhelmed the verification
+ * system, I've implemented the following.
+ *
+ * (Note that because we don't actually support cross-contract calls
+ * yet, we can only use this for one contract at a time, so what's
+ * here is sufficient for current purposes.)
+ *
+ * A. We can only have one authorized call-graph fragment.
+ *
+ * B. That fragment can only have one node in it.
+ *
+ * C. Call-graph nodes track the function involved but not the
+ * argument list.
+ *
+ * D. We can only be matching in one place at one time. That place
+ * can be:
+ *    - before the single node in the single fragment
+ *    - after the single node in the single fragment
+ *    - after the single fragment
+ *
+ * In the first case, if the current call matches, we succeed and
+ * advance past the node.
+ *
+ * In the first case, if the current call doesn't match we assume the
+ * fragment's done and move past it.
+ *
+ * In the second case the fragment is done so we move past it.
+ *
+ * In the third case we always fail because there's nothing left to
+ * match against.
+ *
+ * E. In principle if we are partway through a fragment and the
+ * current contract function returns we should skip over any pieces of
+ * the current fragment this renders inaccessible. In this version
+ * this does nothing because we can't be partway through a fragment.
+ * (XXX: However, there should be an external hook for triggering this
+ * case. That doesn't exist yet, because it's not clear what it should
+ * look like until we have logic for cross-contract calls.)
+ *
+ * F. The top-level contract spec should assert the following
+ * preconditions:
+ *    - that the authorization state is valid (with "valid")
+ *    - what the current invocation is (with "invocation"), passing
+ *      the current contract function name (with a more complete model
+ *      this would also pass the current function argument list too)
+ *    - that the match state is the initial state (with "initial")
+ *      (in principle one may start with a partially discharged state,
+ *      but there isn't currently direct support for asserting it and
+ *      given the current model limitations it isn't very useful)
+ * then it should add authorization fragments with "authorize".
+ * (Currently this can only be done once for the single fragment
+ * supported, and the node list should be a list of a single contract
+ * function name, without an argument list because that isn't
+ * supported either.) It should then bind the resulting auth object to
+ * the contract's pre-state.
+ *
+ * G. The top-level contract spec should then generate an updated auth
+ * model by using one of the authorization functions (corresponding to
+ * the authorization call the contract makes) and bind the result to
+ * the contract's post-state.
+ *
+ * H. The saw-script wrapper code in soroban.saw provides wrappers for
+ * these operations and ghost-state tracking for the pre-state and
+ * post-state, as well as specs for the hypercalls involved.
+ *
+ * I. Because we don't have contract IDs yet (they are BytesObjects,
+ * which we don't have support for) we use the Symbol for the function
+ * name as the contract function name. In the long run this should
+ * probably be either the contract ID or the contract ID paired with
+ * the function name.
  */
 
-/*
- * XXX this is all stubbed out for now.
- */
+
+////////////////////////////////////////////////////////////
+// types
 
 type T = Auth
 
 private
+   /*
+    * We use the following representation:
+    *
+    * (1) to represent the authorization fragment:
+    *    - the address for the fragment
+    *    - the number of nodes in the fragment (fixed to 1)
+    *    - the contract function name for the single node
+    *
+    * Because we don't support contract IDs yet, for now use the
+    * Symbol for the function name instead.
+    *
+    * We'll use 8-bit values to count the number of nodes to try to
+    * reduce the state space. and keep things from getting out of
+    * hand.
+    *
+    * (2) to represent the matching state:
+    *    - whether the fragment is done
+    *    - the next node in the fragment to match against
+    *      (always either 0 or 1)
+    *
+    * (3) to represent the currently running invocation:
+    *    - the current contract function name (as noted above, a
+    *      Symbol for the function name)
+    */
+
+   // type for the array index
+   type NodeNum = [8]
+
    newtype Auth = {
+      // The address and number of nodes for the fragment
+      address: Addr,
+      numnodes: NodeNum,
+
+      // The contract (actually function name) for the one node
+      contract: Values::Symbol::T,
+
+      // The match state: whether the fragment is done, and if
+      // not the next node we're going to use within it.
+      fragdone: Bool,
+      nextnode: NodeNum,
+
+      // The current invocation state. This may need to grow later.
+      invokedcontract: Values::Symbol::T
    }
 
-valid : Auth -> Bool
-valid auth = True
+   // shorten these so the type signatures are readable
+   type Heap = Values::HostHeap
+   type Addr = Values::AddressObject::T
 
+
+////////////////////////////////////////////////////////////
+// predicates
+
+/*
+ * Check that an Auth is valid. Meant for preconditions.
+ *
+ * For this version, we can have only one node in the fragment. The
+ * commented-out code is for having more than one.
+ */
+valid: Auth -> Bool
+valid auth = conditions
+   where
+      conditions =
+         fragment_valid &&
+         matchstate_valid &&
+         invokedcontract_valid
+      //fragment_valid = (auth.numnodes > 0) && addr_valid && nodes_valid
+      fragment_valid = (auth.numnodes == 1) && addr_valid && node_valid 0
+         where
+            addr_valid = Values::AddressObject::valid auth.address
+            //nodes_valid = checknodes auth.numnodes
+            //checknodes i =
+            //   if i == 0 then True
+            //   else node_valid i && checknodes (i - 1)
+            node_valid node = contract_valid
+               where
+                  //contract = arrayLookup auth.contracts node
+                  contract = auth.contract
+                  contract_valid = Values::Symbol::valid contract
+      // Note: because fragments aren't allowed to be
+      // empty, nextnode == 0 is always valid. However,
+      // auth.numnodes is not meaningful if fragdone is
+      // true. Don't rely on it.
+      matchstate_valid = (nextnode == 0) || (nextnode < auth.numnodes)
+         where
+            nextnode = auth.nextnode
+      invokedcontract_valid =
+         Values::Symbol::valid auth.invokedcontract
+
+/*
+ * Check that an Auth is valid _and_ in an initial state:
+ * nothing has been consumed yet. Meant for preconditions.
+ */
 initial: Auth -> Bool
-initial _auth = True
+initial auth = valid auth && (auth.fragdone == False) && (auth.nextnode == 0)
 
-invocation: Values::HostHeap -> Auth -> Values::Symbol::T -> Bool
-invocation _heap _auth _contract = True
+/*
+ * Check the invocation state of an Auth.
+ */
+invocation: Heap -> Auth -> Values::Symbol::T -> Bool
+invocation heap auth sym =
+   Values::Symbol::eq auth.invokedcontract sym heap
 
-authorize: {n} fin n =>
-   Auth -> Values::AddressObject::T -> [n] Values::Symbol::T -> Auth
-authorize auth _addr _nodes = auth
 
-check_noargs: Values::HostHeap -> Auth -> Values::AddressObject::T -> (Auth, Bool)
-check_noargs _heap auth _addr = (auth, True)
+////////////////////////////////////////////////////////////
+// authorize
 
-check_withargs: Values::HostHeap -> Auth -> Values::AddressObject::T -> Values::VecObject::T -> (Auth, Bool)
-check_withargs _heap auth _addr _args = (auth, True)
+private
+   /*
+    * Convert a list of nodes to an array for use as the fragment.
+    *
+    * The default value in the array is the first node. We have to be
+    * careful to be consistent about that so that SMT-level equality
+    * of arrays is consistent with intended-contents-only equality.
+    *
+    * For this version that has only one node in the fragment, pluck
+    * out the first entry in the argument and use that. The commented
+    * out code is for having more than one node.
+    */
+   makenodes: {n} (0 < n, n < 256) =>
+      //[n] Values::Symbol::T -> (NodeNum, Array NodeNum Values::Symbol::T)
+      [n] Values::Symbol::T -> (NodeNum, Values::Symbol::T)
+   makenodes nodes = (1, nodes ! 0)
+   //makenodes nodes = arrays ! 0
+   //   where
+   //      [first] # rest = nodes
+   //      arrays =
+   //         [(1, arrayConstant first)] # [(i + 1, arrayUpdate array i node)
+   //                                         | (i, array) <- arrays
+   //                                         | node <- rest]
+
+/*
+ * Bind a fragment to an authorization state.
+ *
+ * Leaves the matching state and invocation state alone, so you can
+ * assert about that separately.
+ *
+ * This version has only one node in the fragment. The commented-out
+ * code is for having more than one node.
+ */
+authorize: {n} (0 < n, n < 256) =>
+   Auth -> Addr -> [n] Values::Symbol::T -> Auth
+authorize auth addr nodes = auth'
+   where
+      //(num, contracts) = makenodes nodes
+      (num, contract) = makenodes nodes
+      auth' = Auth {
+         address = addr,
+         numnodes = num,
+         //contracts = contracts,
+         contract = contract,
+
+         fragdone = auth.fragdone,
+         nextnode = auth.nextnode,
+
+         invokedcontract = auth.invokedcontract
+      }
+
+
+////////////////////////////////////////////////////////////
+// check
+
+private
+   /*
+    * Update the current node.
+    */
+   set_nextnode: Auth -> Addr -> NodeNum -> Auth
+   set_nextnode auth addr node = auth'
+      where
+         auth' = Auth {
+            address = auth.address,
+            numnodes = auth.numnodes,
+            //contracts = auth.contracts,
+            contract = auth.contract,
+
+            fragdone = auth.fragdone,
+            nextnode = node,
+
+            invokedcontract = auth.invokedcontract
+         }
+
+   /*
+    * Mark the fragment done.
+    */
+   set_fragdone: Auth -> Bool -> Auth
+   set_fragdone auth state = auth'
+      where
+         auth' = Auth {
+            address = auth.address,
+            numnodes = auth.numnodes,
+            //contracts = auth.contracts,
+            contract = auth.contract,
+
+            fragdone = state,
+            nextnode = auth.nextnode,
+
+            invokedcontract = auth.invokedcontract
+         }
+
+   /*
+    * We are done with the fragment. Mark it done, and set nextnode to
+    * 0 as if we were going on to another fragment.
+    */
+   finish_fragment: Auth -> Addr -> Auth
+   finish_fragment auth addr = auth''
+      where
+         auth' = set_fragdone auth True
+         auth'' = set_nextnode auth' addr 0
+
+   /*
+    * Move to the next node in the fragment. If we run out, mark it
+    * done.
+    */
+   advance_to_next_node: Auth -> Addr -> Auth
+   advance_to_next_node auth addr =
+      if done then finish_fragment auth addr
+      else set_nextnode auth addr nextnode'
+      where
+         nextnode' = auth.nextnode + 1
+         done = nextnode' >= auth.numnodes
+
+   /*
+    * Check if the given node of the given fragment matches the
+    * contract presented for authorization (the contract in question
+    * is always the current invoked contract)
+    *
+    * For this version with only one node in the fragment, always
+    * use the only node. (The commented out code is for multiple
+    * nodes.)
+    */
+   match_node: Heap -> Auth -> NodeNum -> Bool
+   match_node heap auth _node = ok
+      where
+         //contract = arrayLookup auth.contracts node
+         contract = auth.contract
+         ok = Values::Symbol::eq contract auth.invokedcontract heap
+
+   /*
+    * Match against the fragment. If it has run out, or if match_node
+    * says the next node doesn't match, return false.
+    */
+   match_fragment: Heap -> Auth -> Addr -> Bool
+   match_fragment heap auth addr = (auth.nextnode < auth.numnodes) && matches
+      where
+         matches = addr_matches && node_matches
+         addr_matches = Values::addressobj_eq addr auth.address
+         node_matches = match_node heap auth auth.nextnode
+
+   /*
+    * Try matching the fragment. If that works, move to the
+    * next node and succeed. If not, finish the fragment, and then
+    * fail because there isn't another fragment to try.
+    *
+    * Return an updated Auth state as well as success/failure.
+    */
+   check_fragment: Heap -> Auth -> Addr -> (Auth, Bool)
+   check_fragment heap auth addr =
+      // try the active fragment
+      if matches then to_nextnode else retry_nextfrag
+      where
+         matches = match_fragment heap auth addr
+         // the active fragment matched, advance to its next node
+         // and succeed
+         to_nextnode = (auth', True)
+            where auth' = advance_to_next_node auth addr
+         // the active fragment didn't match; drop it
+         retry_nextfrag = (auth', False)
+            where
+               auth' = finish_fragment auth addr
+
+/*
+ * Check whether the invoked function (and, theoretically, args) are
+ * authorized. Returns an updated authorization state as well as the
+ * success/failure result.
+ */
+check_noargs: Heap -> Auth -> Addr -> (Auth, Bool)
+check_noargs heap auth addr = check_fragment heap auth addr
+
+/* XXX: args aren't supported so ignore them */
+check_withargs: Heap -> Auth -> Addr -> Values::VecObject::T -> (Auth, Bool)
+check_withargs heap auth addr _args = check_fragment heap auth addr
 

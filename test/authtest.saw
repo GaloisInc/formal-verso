@@ -1,0 +1,54 @@
+import "../lib/Values.cry";
+import "../lib/Auth.cry";
+
+/*
+ * Some correctness property checks for Auth.cry.
+ *
+ * The lemma statements in the comments here use Coq notation because
+ * SAW doesn't have adequate notation of its own.
+ *
+ * Note that these are checks of the form pre -> ~post, so "Unsat"
+ * means QED.
+ */
+
+
+/*
+ * authorize preserves validity of the Auth
+ *
+ * forall auth addr nodes,
+ *    valid auth ->
+ *    addressobj_valid addr ->
+ *    (forall contract,
+ *       In contract nodes ->
+ *       symbol_valid contract) ->
+ *    valid (authorize auth addr nodes)
+ *
+ * For now we're limited to one node, so do that.
+ */
+sat_print (w4_unint_z3 []) {{
+   \auth addr (nodes: [1] SymbolT) -> (
+      valid auth &&
+      addressobj_valid addr &&
+      //nodelist_valid nodes &&
+      symbol_valid (nodes ! 0) &&
+      ~ (valid (authorize auth addr nodes))
+   )
+}};
+
+/*
+ * check_fragment preserves validity of the Auth
+ *
+ * forall heap auth addr,
+ *    valid auth ->
+ *    addressobj_valid addr ->
+ *    (let (addr', ok) := check_fragment heap auth addr in valid addr')
+ */
+sat_print (w4_unint_z3 []) {{
+   \heap auth addr -> (
+      valid auth &&
+      addressobj_valid addr &&
+      ~ (valid addr'
+          where (addr', ok) = check_fragment heap auth addr
+      )
+   )
+}};

@@ -263,7 +263,7 @@ private
    full_eq : Val -> Val -> HostValues::Heap -> Bool
    full_eq v1 v2 heap =
       if tag1 != tag2 then False
-      | tag1 < tag_symbolsmall then small_val_eq v1 v2
+      | tag1 < small_tag_upper_bound then small_val_eq v1 v2
       //| tag1 == tag_symbolobject  // XXX notyet, the heap doesn't support them yet
       | tag1 == tag_vecobject then
            if handle1 == handle2 then True

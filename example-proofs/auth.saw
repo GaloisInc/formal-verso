@@ -35,7 +35,9 @@ let auth_spec = do {
   key <- mir_fresh_cryptol_var "DataKey::Counter" {| (Values::SymbolT, Values::AddressObjectT) |};
   // TODO - need the AddressObj to be the same as the fresh one above
   mir_assert {{ Values::addressobj_eq key.1 fresh_addr_obj }};
-  let key_vecobj = {{ DataKeyEnum::from_native key heap }};
+  let heap'key_vecobj = {{ DataKeyEnum::from_native key heap }};
+  let heap' = {{ heap'key_vecobj.0 }};
+  let key_vecobj = {{ heap'key_vecobj.1 }};
 
   let user_counter_val = soroban_store_get store key_vecobj {| Values::U32T |};
   count <- option.unwrap {{ Option::unwrap_or user_counter_val (Option::ok Values::u32_zero) }};
@@ -58,6 +60,7 @@ let auth_spec = do {
   let count' = {{ Values::u32_from_native native_count' }};
 
   soroban_storage_assert_state (soroban_store_set store key_vecobj count');
+  soroban_hostheap_assert_state heap';
   soroban_auth_assert_state auth';
 
   mir_return (mir_term native_count');

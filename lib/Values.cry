@@ -790,7 +790,10 @@ submodule Symbol where
    // defer equality to raw to avoid duplication (since full_eq needs
    // to be recursive)
    eq: T -> T -> HostValues::Heap -> Bool
-   eq x y heap = full_eq x.val y.val heap
+   // XXX this causes saw to diverge exploring invalid heaps
+   //eq x y heap = full_eq x.val y.val heap
+   // and XXX this won't work for SymbolObject
+   eq x y heap = body_of_val x.val == body_of_val y.val
 
 
 ////////////////////////////////////////////////////////////

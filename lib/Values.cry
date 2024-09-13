@@ -799,7 +799,7 @@ submodule Symbol where
    // (note: when unwinding this also update valid' above)
    //eq x y heap = full_eq x.val y.val heap
    // and XXX this won't work for SymbolObject
-   eq x y heap = body_of_val x.val == body_of_val y.val
+   eq x y heap = small_val_eq x.val y.val
 
 
 ////////////////////////////////////////////////////////////

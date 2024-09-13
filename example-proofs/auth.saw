@@ -36,6 +36,8 @@ let auth_spec = do {
   auth' <- soroban_auth_check_currentargs heap auth fresh_addr_obj;
 
   key <- mir_fresh_cryptol_var "DataKey::Counter" {| (Values::SymbolT, Values::AddressObjectT) |};
+  mir_assert {{ Values::symbol_valid key.0 }};
+  mir_assert {{ Values::addressobj_valid key.1 }};
   mir_assert {{ Values::symbol_eq key.0 countersym heap }};
   mir_assert {{ Values::addressobj_eq key.1 fresh_addr_obj }};
   let heap'key_vecobj = {{ DataKeyEnum::from_native key heap }};
@@ -43,6 +45,8 @@ let auth_spec = do {
   let key_vecobj = {{ heap'key_vecobj.1 }};
 
   key2 <- mir_fresh_cryptol_var "DataKey::Counter2" {| (Values::SymbolT, Values::AddressObjectT) |};
+  mir_assert {{ Values::symbol_valid key2.0 }};
+  mir_assert {{ Values::addressobj_valid key2.1 }};
   mir_assert {{ Values::symbol_eq key2.0 countersym heap }};
   mir_assert {{ Values::addressobj_eq key2.1 fresh_addr_obj }};
   let heap''key2_vecobj = {{ DataKeyEnum::from_native key2 heap' }};

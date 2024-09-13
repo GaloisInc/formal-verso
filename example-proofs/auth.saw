@@ -14,6 +14,9 @@ soroban <- soroban_init mod ["address", "require_auth", "storage", "vec_val", "v
 // get a Symbol for the function name
 let incrsym = {{ Values::symbol_from_native "increment" }};
 
+// get a Symbol for the rust constructor name
+let countersym = {{ Values::symbol_from_native "Counter" }};
+
 let auth_spec = do {
 
   fresh_addr_obj <- soroban_value_fresh "fresh_addr_obj" {| Values::AddressObjectT|};
@@ -33,12 +36,14 @@ let auth_spec = do {
   auth' <- soroban_auth_check_currentargs heap auth fresh_addr_obj;
 
   key <- mir_fresh_cryptol_var "DataKey::Counter" {| (Values::SymbolT, Values::AddressObjectT) |};
+  mir_assert {{ Values::symbol_eq key.0 countersym }};
   mir_assert {{ Values::addressobj_eq key.1 fresh_addr_obj }};
   let heap'key_vecobj = {{ DataKeyEnum::from_native key heap }};
   let heap' = {{ heap'key_vecobj.0 }};
   let key_vecobj = {{ heap'key_vecobj.1 }};
 
   key2 <- mir_fresh_cryptol_var "DataKey::Counter2" {| (Values::SymbolT, Values::AddressObjectT) |};
+  mir_assert {{ Values::symbol_eq key2.0 countersym }};
   mir_assert {{ Values::addressobj_eq key2.1 fresh_addr_obj }};
   let heap''key2_vecobj = {{ DataKeyEnum::from_native key2 heap' }};
   let heap'' = {{ heap''key2_vecobj.0 }};

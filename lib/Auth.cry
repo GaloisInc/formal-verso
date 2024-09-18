@@ -231,7 +231,9 @@ private
     *    - the address for the fragment
     *    - the number of nodes in the fragment (fixed to 1)
     *    - the contract function name for the single node
-    *    - the arguments for the single node as an ArgBundle
+    *    - the number of arguments for the single node
+    *    - the argument list for the single node as an array from ArgNum to
+    *      Values::Raw::T
     *
     * Because we don't support contract IDs yet, for now use the
     * Symbol for the function name instead.
@@ -274,7 +276,8 @@ private
       contract: Values::Symbol::T,
 
       // The argument list for the one node
-      args: ArgBundle,
+      nargs: ArgNum,
+      args: Array ArgNum Values::Raw::T,
 
       // The match state: whether the fragment is done, and if
       // not the next node we're going to use within it.
@@ -361,7 +364,7 @@ valid auth = conditions
                   //contract = arrayLookup auth.contracts node
                   contract = auth.contract
                   contract_valid = Values::Symbol::valid contract
-                  args_valid = argbundle_valid auth.args
+                  args_valid = argbundle_valid (auth.nargs, auth.args)
       // Note: because fragments aren't allowed to be
       // empty, nextnode == 0 is always valid. However,
       // auth.numnodes is not meaningful if fragdone is
@@ -435,8 +438,8 @@ private
     */
    makenodes: {n} (0 < n, n < 256) =>
       //[n] (Values::Symbol::T, ArgBundle) -> (NodeNum, Array NodeNum Values::Symbol::T, Array NodeNum ArgNum, Array NodeNum (Array ArgNum Values::Raw::T))
-      [n] (Values::Symbol::T, ArgBundle) -> (NodeNum, Values::Symbol::T, ArgBundle)
-   makenodes nodes = (1, (nodes ! 0).0, (nodes ! 0).1)
+      [n] (Values::Symbol::T, ArgBundle) -> (NodeNum, Values::Symbol::T, ArgNum, Array ArgNum Values::Raw::T)
+   makenodes nodes = (1, (nodes ! 0).0, (nodes ! 0).1.0, (nodes ! 0).1.1)
    //makenodes nodes = arrays ! 0
    //   where
    //      [(firstsym, (firstnargs, firstargs))] # rest = nodes
@@ -460,13 +463,13 @@ authorize: {n} (0 < n, n < 256) =>
 authorize auth addr nodes = auth'
    where
       //(num, contracts, nargs, args) = makenodes nodes
-      (num, contract, args) = makenodes nodes
+      (num, contract, nargs, args) = makenodes nodes
       auth' = Auth {
          address = addr,
          numnodes = num,
          //contracts = contracts,
          contract = contract,
-         //nargs = nargs,
+         nargs = nargs,
          args = args,
 
          fragdone = auth.fragdone,
@@ -492,7 +495,7 @@ private
             numnodes = auth.numnodes,
             //contracts = auth.contracts,
             contract = auth.contract,
-            //nargs = auth.nargs,
+            nargs = auth.nargs,
             args = auth.args,
 
             fragdone = auth.fragdone,
@@ -513,7 +516,7 @@ private
             numnodes = auth.numnodes,
             //contracts = auth.contracts,
             contract = auth.contract,
-            //nargs = auth.nargs,
+            nargs = auth.nargs,
             args = auth.args,
 
             fragdone = state,
@@ -559,9 +562,10 @@ private
       where
          //contract = arrayLookup auth.contracts node
          contract = auth.contract
+         nargs = auth.nargs
          args = auth.args
          contract_ok = Values::Symbol::eq contract auth.invokedcontract heap
-         args_ok = argbundle_eq args argsfound heap
+         args_ok = argbundle_eq (nargs, args) argsfound heap
 
    /*
     * Match against the fragment. If it has run out, or if match_node

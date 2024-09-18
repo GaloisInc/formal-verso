@@ -56,16 +56,15 @@ sat_print (w4_unint_z3 []) {{
  *       argbundle_valid args) ->
  *    valid (authorize auth addr nodes)
  *
- * For now we're limited to one node, so do that.
+ * XXX: has to hardwire the number of nodes in the node list,
+ * which is not very general
  */
 let _ = \() ->
 sat_print (w4_unint_z3 []) {{
-   \auth addr (nodes: [1] (SymbolT, ArgBundle)) -> (
+   \auth addr (nodes: [3] (SymbolT, ArgBundle)) -> (
       valid auth &&
       addressobj_valid addr &&
-      //nodelist_valid nodes &&
-      symbol_valid ((nodes ! 0).0) &&
-      argbundle_valid ((nodes ! 0).1) &&
+      nodelist_valid nodes &&
       ~ (valid (authorize auth addr nodes))
    )
 }};

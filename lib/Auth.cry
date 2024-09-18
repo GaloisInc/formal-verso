@@ -155,19 +155,21 @@ import submodule Values::VecObject as Values::VecObject
  *
  * A. We can only have one authorized call-graph fragment.
  *
- * B. That fragment can only have one node in it.
+ * B. Call-graph fragments are restricted to linear chains. That is,
+ * you can have f -> g -> h, but not any of the branching cases
+ * described above.
  *
  * C. Call-graph nodes track the function involved and the argument
  * list.
  *
  * D. We can only be matching in one place at one time. That place
  * can be:
- *    - before the single node in the single fragment
- *    - after the single node in the single fragment
+ *    - before any node in the single fragment
+ *    - after all the nodes in the single fragment
  *    - after the single fragment
  *
  * In the first case, if the current call matches, we succeed and
- * advance past the node.
+ * advance past the current node.
  *
  * In the first case, if the current call doesn't match we assume the
  * fragment's done and move past it.
@@ -193,13 +195,12 @@ import submodule Values::VecObject as Values::VecObject
  *      argument list
  *    - that the match state is the initial state (with "initial")
  *      (in principle one may start with a partially discharged state,
- *      but there isn't currently direct support for asserting it and
- *      given the current model limitations it isn't very useful)
+ *      but there isn't currently direct support for asserting it)
  * then it should add authorization fragments with "authorize".
  * (Currently this can only be done once for the single fragment
- * supported, and the node list should be a list of a single contract
- * function name and single argument list.) It should then bind the
- * resulting auth object to the contract's pre-state.
+ * supported, and the node list should be a list of contract function
+ * names and argument lists.) It should then bind the resulting auth
+ * object to the contract's pre-state.
  *
  * G. The top-level contract spec should then generate an updated auth
  * model by using one of the authorization functions (corresponding to
@@ -229,11 +230,10 @@ private
     *
     * (1) to represent the authorization fragment:
     *    - the address for the fragment
-    *    - the number of nodes in the fragment (fixed to 1)
-    *    - the contract function name for the single node
-    *    - the number of arguments for the single node
-    *    - the argument list for the single node as an array from ArgNum to
-    *      Values::Raw::T
+    *    - the number of nodes in the fragment
+    *    - an array mapping node -> contract function name
+    *    - an array mapping node -> number of arguments
+    *    - an array mapping node -> array mapping ArgNum to Values::Raw::T
     *
     * Because we don't support contract IDs yet, for now use the
     * Symbol for the function name instead.
@@ -245,7 +245,6 @@ private
     * (2) to represent the matching state:
     *    - whether the fragment is done
     *    - the next node in the fragment to match against
-    *      (always either 0 or 1)
     *
     * (3) to represent the currently running invocation:
     *    - the current contract function name (as noted above, a
@@ -272,12 +271,12 @@ private
       address: Addr,
       numnodes: NodeNum,
 
-      // The contract (actually function name) for the one node
-      contract: Values::Symbol::T,
+      // The contract (actually function name) for each node
+      contracts: Array NodeNum Values::Symbol::T,
 
       // The argument list for the one node
-      nargs: ArgNum,
-      args: Array ArgNum Values::Raw::T,
+      nargs: Array NodeNum ArgNum,
+      args: Array NodeNum (Array ArgNum Values::Raw::T),
 
       // The match state: whether the fragment is done, and if
       // not the next node we're going to use within it.
@@ -337,11 +336,25 @@ private
                arg1 = arrayLookup args1 i
                arg2 = arrayLookup args2 i
 
+   /*
+    * Check that a full fragment (as passed to authorize, as a list
+    * of nodes) is valid.
+    *
+    * Not actually used here because it's only needed for defining
+    * correctness properties of authorize, and for the time being
+    * Cryptol can't check those itself because they involve arrays.
+    */
+   nodelist_valid: {n} fin n => [n] Values::Symbol::T -> Bool
+   nodelist_valid nodes = oks ! 0
+      where
+         oks = [True] # [checknode node && ok'
+                           | ok' <- oks
+                           | node <- nodes]
+         checknode contract =
+            Values::Symbol::valid contract
+
 /*
  * Check that an Auth is valid. Meant for preconditions.
- *
- * For this version, we can have only one node in the fragment. The
- * commented-out code is for having more than one.
  */
 valid: Auth -> Bool
 valid auth = conditions
@@ -351,18 +364,16 @@ valid auth = conditions
          matchstate_valid &&
          invokedcontract_valid &&
          invokedargs_valid
-      //fragment_valid = (auth.numnodes > 0) && addr_valid && nodes_valid
-      fragment_valid = (auth.numnodes == 1) && addr_valid && node_valid 0
+      fragment_valid = (auth.numnodes > 0) && addr_valid && nodes_valid
          where
             addr_valid = Values::AddressObject::valid auth.address
-            //nodes_valid = checknodes auth.numnodes
-            //checknodes i =
-            //   if i == 0 then True
-            //   else node_valid i && checknodes (i - 1)
+            nodes_valid = checknodes auth.numnodes
+            checknodes i =
+               if i == 0 then True
+               else node_valid i && checknodes (i - 1)
             node_valid node = contract_valid && args_valid
                where
-                  //contract = arrayLookup auth.contracts node
-                  contract = auth.contract
+                  contract = arrayLookup auth.contracts node
                   contract_valid = Values::Symbol::valid contract
                   args_valid = argbundle_valid (auth.nargs, auth.args)
       // Note: because fragments aren't allowed to be
@@ -431,44 +442,33 @@ private
     * The default value in the array is the first node. We have to be
     * careful to be consistent about that so that SMT-level equality
     * of arrays is consistent with intended-contents-only equality.
-    *
-    * For this version that has only one node in the fragment, pluck
-    * out the first entry in the argument and use that. The commented
-    * out code is for having more than one node.
     */
    makenodes: {n} (0 < n, n < 256) =>
-      //[n] (Values::Symbol::T, ArgBundle) -> (NodeNum, Array NodeNum Values::Symbol::T, Array NodeNum ArgNum, Array NodeNum (Array ArgNum Values::Raw::T))
-      [n] (Values::Symbol::T, ArgBundle) -> (NodeNum, Values::Symbol::T, ArgNum, Array ArgNum Values::Raw::T)
-   makenodes nodes = (1, (nodes ! 0).0, (nodes ! 0).1.0, (nodes ! 0).1.1)
-   //makenodes nodes = arrays ! 0
-   //   where
-   //      [(firstsym, (firstnargs, firstargs))] # rest = nodes
-   //      arrays =
-   //         [(1, arrayConstant firstsym, arrayConstant firstnargs, arrayConstant firstargs)] #
-   //         [(i + 1, arrayUpdate symarray i sym, arrayUpdate nargarray i nargs, arrayUpdate argarray i args)
-   //             | (i, symarray, nargarray, argarray) <- arrays
-   //             | (sym, (nargs, args)) <- rest]
+      [n] (Values::Symbol::T, ArgBundle) -> (NodeNum, Array NodeNum Values::Symbol::T, Array NodeNum ArgNum, Array NodeNum (Array ArgNum Values::Raw::T))
+   makenodes nodes = arrays ! 0
+      where
+         [(firstsym, (firstnargs, firstargs))] # rest = nodes
+         arrays =
+            [(1, arrayConstant firstsym, arrayConstant firstnargs, arrayConstant firstargs)] #
+            [(i + 1, arrayUpdate symarray i sym, arrayUpdate nargarray i nargs, arrayUpdate argarray i args)
+                | (i, symarray, nargarray, argarray) <- arrays
+                | (sym, (nargs, args)) <- rest]
 
 /*
  * Bind a fragment to an authorization state.
  *
  * Leaves the matching state and invocation state alone, so you can
  * assert about that separately.
- *
- * This version has only one node in the fragment. The commented-out
- * code is for having more than one node.
  */
 authorize: {n} (0 < n, n < 256) =>
    Auth -> Addr -> [n] (Values::Symbol::T, ArgBundle) -> Auth
 authorize auth addr nodes = auth'
    where
-      //(num, contracts, nargs, args) = makenodes nodes
-      (num, contract, nargs, args) = makenodes nodes
+      (num, contracts, nargs, args) = makenodes nodes
       auth' = Auth {
          address = addr,
          numnodes = num,
-         //contracts = contracts,
-         contract = contract,
+         contracts = contracts,
          nargs = nargs,
          args = args,
 
@@ -493,8 +493,7 @@ private
          auth' = Auth {
             address = auth.address,
             numnodes = auth.numnodes,
-            //contracts = auth.contracts,
-            contract = auth.contract,
+            contracts = auth.contracts,
             nargs = auth.nargs,
             args = auth.args,
 
@@ -514,8 +513,7 @@ private
          auth' = Auth {
             address = auth.address,
             numnodes = auth.numnodes,
-            //contracts = auth.contracts,
-            contract = auth.contract,
+            contracts = auth.contracts,
             nargs = auth.nargs,
             args = auth.args,
 
@@ -553,17 +551,13 @@ private
     * contract and argument list presented for authorization (the
     * contract in question is always the current invoked contract)
     *
-    * For this version with only one node in the fragment, always
-    * use the only node. (The commented out code is for multiple
-    * nodes.)
     */
    match_node: Heap -> Auth -> NodeNum -> ArgBundle -> Bool
-   match_node heap auth _node argsfound = contract_ok && args_ok
+   match_node heap auth node argsfound = contract_ok && args_ok
       where
-         //contract = arrayLookup auth.contracts node
-         contract = auth.contract
-         nargs = auth.nargs
-         args = auth.args
+         contract = arrayLookup auth.contracts node
+         nargs = arrayLookup auth.nargs node
+         args = arrayLookup auth.args node
          contract_ok = Values::Symbol::eq contract auth.invokedcontract heap
          args_ok = argbundle_eq (nargs, args) argsfound heap
 

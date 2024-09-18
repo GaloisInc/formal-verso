@@ -274,7 +274,7 @@ private
       // The contract (actually function name) for each node
       contracts: Array NodeNum Values::Symbol::T,
 
-      // The argument list for the one node
+      // The argument list for each node in the fragment
       nargs: Array NodeNum ArgNum,
       args: Array NodeNum (Array ArgNum Values::Raw::T),
 
@@ -344,14 +344,14 @@ private
     * correctness properties of authorize, and for the time being
     * Cryptol can't check those itself because they involve arrays.
     */
-   nodelist_valid: {n} fin n => [n] Values::Symbol::T -> Bool
+   nodelist_valid: {n} fin n => [n] (Values::Symbol::T, ArgBundle) -> Bool
    nodelist_valid nodes = oks ! 0
       where
          oks = [True] # [checknode node && ok'
                            | ok' <- oks
                            | node <- nodes]
-         checknode contract =
-            Values::Symbol::valid contract
+         checknode (contract, args) =
+            Values::Symbol::valid contract && argbundle_valid args
 
 /*
  * Check that an Auth is valid. Meant for preconditions.
@@ -375,7 +375,9 @@ valid auth = conditions
                where
                   contract = arrayLookup auth.contracts node
                   contract_valid = Values::Symbol::valid contract
-                  args_valid = argbundle_valid (auth.nargs, auth.args)
+                  nargs = arrayLookup auth.nargs node
+                  args = arrayLookup auth.args node
+                  args_valid = argbundle_valid (nargs, args)
       // Note: because fragments aren't allowed to be
       // empty, nextnode == 0 is always valid. However,
       // auth.numnodes is not meaningful if fragdone is

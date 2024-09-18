@@ -2470,12 +2470,20 @@ let soroban_auth_fresh (heap: Term /*HostHeap*/) (sym : Term /*Symbol*/) = do {
 };
 
 /*
+ * Construct an ArgBundle. This function probably doesn't need to exist here,
+ * but this avoids having contracts need to directly import Auth.cry.
+ */
+let soroban_build_arglist (args: Term /* list of Values::Raw::T */) =
+   let args' = {{ Auth::argbundle_of_list args }} in
+   args'
+;
+
+/*
  * Contract-facing way to add an authorization.
  *
- * XXX: this should always take an arglist. In some representation that
- * isn't a VecObject, for the reasons cited above.
+ * The argbundles in the node list should be built with soroban_build_arglist.
  */
-let soroban_declare_authorized (auth : Term /* Auth */) (addr : Term /* Address */) (nodes : Term /* list of symbols */)=
+let soroban_declare_authorized (auth : Term /* Auth */) (addr : Term /* Address */) (nodes : Term /* list of symbols and argbundles */)=
    let auth' = {{ Auth::authorize auth addr nodes }} in
    auth'
 ;

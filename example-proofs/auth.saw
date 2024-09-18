@@ -35,6 +35,13 @@ let auth_spec = do {
 
   auth' <- soroban_auth_check_currentargs heap auth fresh_addr_obj;
 
+  /*
+   * We need to allocate two copies of the key because the compiled
+   * contract code does so. This seems to be because the conversion to
+   * VecObject happens inside each of the two store accesses and it
+   * has no way to cache/keep/share the results.
+   */
+
   key <- mir_fresh_cryptol_var "DataKey::Counter" {| (Values::SymbolT, Values::AddressObjectT) |};
   mir_assert {{ Values::symbol_valid key.0 }};
   mir_assert {{ Values::addressobj_valid key.1 }};

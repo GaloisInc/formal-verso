@@ -195,8 +195,8 @@ private
           [32] ->
           Bool
    vec_representation_equiv_at subcmp rep1 rep2 heap i =
-      if subcmp x1 x2 heap == False then False
-      | i >= rep1.size then True
+      if i >= rep1.size then True
+      | subcmp x1 x2 heap == False then False
       else vec_representation_equiv_at subcmp rep1 rep2 heap (i + 1)
       where
          x1 = arrayLookup rep1.data i

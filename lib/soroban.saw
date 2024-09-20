@@ -1689,6 +1689,7 @@ let make_hostvalue_overrides (smi : SorobanMIRItems) mod features = do {
       vec_get_overrides,
       vec_push_back_overrides,
       vec_new_from_slice_overrides,
+      vec_unpack_to_slice_overrides,
       map_new_from_slices_overrides,
       map_unpack_to_slice_overrides
    ]);

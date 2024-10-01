@@ -52,6 +52,26 @@ import submodule Values::VecObject as Values::VecObject
  *         \-> g -> w
  * that is, whether the sub-nodes are ordered or not.
  *
+ * Update: yes, each subtree corresponds to a single execution
+ * sequence. If there are two calls from f to g, then there are two g
+ * subtrees, and if g is going to call h each subtree has its own h;
+ * that is, there are no diamonds. Also, while in general reentrancy
+ * is prohibited there's apparently a special case where it's not,
+ * but this results in subtrees of the form f -> f -> g not cycles.
+ * So the part that says "this is not totally clear" is correct.
+ *
+ * Update: subnodes are somewhat ordered. If there are multiple subtrees
+ * for the same function these subtrees are consumed in order. However,
+ * if there are multiple subtrees for different functions, those can be
+ * consumed in any order because it searches for unused subtrees from
+ * the beginning of the list each time. That is, the two fragments above
+ * are different but these two are equivalent:
+ *       f --> g -> w
+ *         \-> h -> z
+ * and
+ *       f --> h -> z
+ *         \-> g -> w
+ *
  * 2. When we start executing we have some collection of call graph
  * fragments that we're allowed to execute; these have been signed
  * by the principal behind the Address associated with the fragment.
@@ -61,6 +81,10 @@ import submodule Values::VecObject as Values::VecObject
  * conclude the call is authorized. Then we mark off the node we just
  * matched in the fragment as used. When all the nodes in the fragment
  * have been used, the whole fragment is marked used and/or discarded.
+ *
+ * Update: subtrees of fragments (including the whole tree as one
+ * case) become unreachable when the function rooting the subtree
+ * returns, but it's not required that the whole subtree gets used.
  *
  * 4. It appears that a node in a fragment matches if:
  *    - it names the same contract
@@ -75,6 +99,12 @@ import submodule Values::VecObject as Values::VecObject
  * then get discharged and marked used one at a time. If/once
  * execution deviates from the pattern the fragment can no longer
  * authorize further calls.
+ *
+ * Update: the last sentence there is not quite true; the fragment is
+ * marked used as its pieces are matched, but the only thing that
+ * cancels fragments or subtrees of fragments is when the function
+ * that matched the root returns, as described above. (However, any
+ * failure nonetheless causes the whole thing to crash out and stop.)
  *
  * As noted above, it's unclear if the patterns of calls are intended
  * to be ordered. Thus, given the example
@@ -92,6 +122,15 @@ import submodule Values::VecObject as Values::VecObject
  *    call f, call g, call z, return z, call w
  * is not.
  *
+ * Update: the ordering behavior is as described above. In this case
+ * the g -> w subtree will be matched on the first call to g so if
+ * the first call to g ends up being the g -> z one it will fail.
+ * Note that this means that 
+ *    call f, call g, call w, return w, return g, return f
+ * is authorized but
+ *    call f, call g, call z, return z, return g, return f
+ * is not, despite what I'd previously thought.
+ *
  * It's also unclear if you can have more than one active fragment for
  * the same Address at a time. That is, if you have the two fragments
  *       f -> g -> w
@@ -106,6 +145,25 @@ import submodule Values::VecObject as Values::VecObject
  * authorized. From the apparent intent of the system it seems like
  * the first should be authorized but not the second, but it's hard to
  * see how they can readily be distinguished.
+ *
+ * Update: yes, you can have more than one active fragment for the
+ * same Address. However, it matches against all currently active
+ * fragments before starting any new ones. So given the example in the
+ * previous paragraph,
+ *    call f, call g, call z, return z, return g, call g, call w, return all
+ *    call f, call g, call z, call g, call w, return z, return w, return all
+ * are both not authorized because it will pick the g from the first
+ * fragment for the first g execution, but
+ *    call f, call g, call w, return w, return g, call g, call z, return all
+ *    call f, call g, call w, call g, call z, return w, return z, return all
+ * are both authorized. Also, although calling g -> g (or g -> w -> g)
+ * is normally prohibited by an unrelated mechanism, that isn't an
+ * authorization issue so these:
+ *    call f, call g, call w, return w, call g, return g, call z, return all
+ *    call f, call g, call w, call g, return w, return g, call z, return all
+ * are both authorized; that is, the second fragment can be started by
+ * a call to g at any point, and finishing the first call to g doesn't
+ * affect the second fragment.
  *
  * Finally, if there are multiple possibly matching fragments, it's
  * not clear which you select to match, and contrary to a vague
@@ -122,6 +180,12 @@ import submodule Values::VecObject as Values::VecObject
  * the same it doesn't matter, and if one's a subgraph of another it's
  * clear you should pick the smaller one, but in general there's no
  * obvious answer.)
+ *
+ * Update: the fragments are provided in some order and if they begin
+ * with the same function they're matched in the order given, so in
+ * the above example your first f call must be the one that proceeds
+ * to w. There is no nondeterministic matching or backtracking here;
+ * that kind of thing is undesirable in security systems.
  *
  * 5. In addition to the structural matching described above, each
  * node also has a list of values in it, which correspond to the

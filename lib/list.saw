@@ -1,18 +1,20 @@
-typedef ListAPI = {
-  concats : ([[a]] -> [a]),
-  unzip : ([(a, b)] -> ([a], [b])),
-  map : ((a -> b) -> [a] -> [b]),
-  mapM : ((a -> M b) -> [a] -> M [b]),
-  foldl : ((b -> a -> b) -> b -> [a] -> b),
-  range : (Int -> Int -> [Int]),
-  sequence : ([m a] -> m [a])
-};
+// SAW no longer accepts this; that's a bug. See saw-script #2334.
+// When that's fixed, don't forget to also uncomment the use below.
+//typedef ListAPI = {
+//  concats : ([[a]] -> [a]),
+//  unzip : ([(a, b)] -> ([a], [b])),
+//  map : ((a -> b) -> [a] -> [b]),
+//  mapM : ((a -> M b) -> [a] -> M [b]),
+//  foldl : ((b -> a -> b) -> b -> [a] -> b),
+//  range : (Int -> Int -> [Int]),
+//  sequence : ([M a] -> M [a])
+//};
 
 typedef StringListAPI = {
   elem : (String -> [String] -> Bool)
 };
 
-let list : ListAPI =
+let list /*: ListAPI*/ =
 
   /*
    * note: saw's "concat" is append (as in xs ++ ys), not what's
